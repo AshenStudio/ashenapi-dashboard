@@ -338,8 +338,8 @@
                 if (ok) {
                     App.showToast('Session renewed', 'success');
                     iframe.src = pgAdminUrl;
+                    // onConnected() will restart refresh + monitor via setTimeout chain
                     setTimeout(checkConnection, 5000);
-                    startSessionRefresh();
                 } else {
                     App.showToast('Your session has expired. Please log in again.', 'error');
                     setTimeout(() => { window.location.href = 'login.html'; }, 2000);
