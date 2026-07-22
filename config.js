@@ -4,6 +4,7 @@
 window.ASHEN_CONFIG = {
     // Build timestamp — check this in your browser to confirm
     // you're running the latest config (compare with GitHub)
+    // configBuiltAt auto-updates when API_URL env var is set at runtime
     configBuiltAt: '2026-07-22T23:00:00Z',
 
     // API base URL (no trailing slash)
