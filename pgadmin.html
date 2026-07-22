@@ -170,10 +170,58 @@
             const directUrlEl = document.getElementById('direct-url');
             const standaloneLink = document.getElementById('open-standalone');
 
-            // Determine pgAdmin URL (relative — proxied through the API at /pgadmin/)
             const pgAdminUrl = cfg.pgAdminUrl || '/pgadmin/';
             directUrlEl.textContent = window.location.origin + pgAdminUrl;
             standaloneLink.href = pgAdminUrl;
+
+            // ── Session refresh ────────────────────────────
+            let refreshInterval = null;
+
+            async function refreshPgAdminSession() {
+                const token = getToken();
+                if (!token) return false;
+                try {
+                    const res = await fetch(cfg.apiUrl + '/pgadmin/auth', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': 'Bearer ' + token,
+                            'Accept': 'application/json',
+                        },
+                        credentials: 'include',
+                    });
+                    return res.ok;
+                } catch {
+                    return false;
+                }
+            }
+
+            function startSessionRefresh() {
+                // Refresh the cookie every 25 minutes (cookie lasts 1 hour).
+                // The Bearer token itself expires after 60 min — if it's gone
+                // stale, the refresh will fail silently and the reactive
+                // 401 handler will catch the failure later.
+                if (refreshInterval) clearInterval(refreshInterval);
+                refreshInterval = setInterval(async () => {
+                    const ok = await refreshPgAdminSession();
+                    if (!ok) {
+                        // Token might have expired — try a second time
+                        // in case it was a transient network issue
+                        setTimeout(async () => {
+                            const retry = await refreshPgAdminSession();
+                            if (!retry) {
+                                console.warn('pgAdmin session refresh failed — token may have expired');
+                            }
+                        }, 2000);
+                    }
+                }, 25 * 60 * 1000); // 25 min
+            }
+
+            function stopSessionRefresh() {
+                if (refreshInterval) {
+                    clearInterval(refreshInterval);
+                    refreshInterval = null;
+                }
+            }
 
             // ── Authenticate & load pgAdmin ────────────────
             async function loadPgAdmin() {
@@ -184,63 +232,31 @@
                 statusBadge.textContent = '⟳ Authenticating…';
 
                 try {
-                    // First, authenticate to get a session cookie
-                    const token = getToken();
-                    if (!token) {
-                        throw new Error('No auth token found. Please log in.');
+                    const ok = await refreshPgAdminSession();
+                    if (!ok) {
+                        throw new Error('Authentication request failed. Check your connection.');
                     }
 
-                    const res = await fetch(cfg.apiUrl + '/pgadmin/auth', {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': 'Bearer ' + token,
-                            'Accept': 'application/json',
-                        },
-                        credentials: 'include',
-                    });
-
-                    if (!res.ok) {
-                        const body = await res.json().catch(() => ({}));
-                        throw new Error(body.detail || 'Authentication failed (HTTP ' + res.status + ')');
-                    }
-
-                    // Cookie is now set — load pgAdmin in iframe
                     statusBadge.textContent = '⟳ Connecting';
                     iframe.src = pgAdminUrl;
-
-                    // After a delay, check if it loaded
                     setTimeout(checkConnection, 5000);
                 } catch (err) {
-                    console.error('pgAdmin auth failed:', err);
-                    skeleton.classList.add('hidden');
-                    iframe.classList.add('hidden');
-                    statusBadge.className = 'status-badge error';
-                    statusBadge.textContent = '✗ Auth Failed';
-                    errorDiv.classList.remove('hidden');
-                    // Update error message
-                    const msgEl = errorDiv.querySelector('p');
-                    if (msgEl) {
-                        msgEl.innerHTML = 'Could not authenticate for pgAdmin access: <strong class="text-red-400">' +
-                            App.escapeHtml(err.message || 'Unknown error') + '</strong>';
-                    }
+                    showAuthError(err.message || 'Unknown error');
                 }
             }
 
             // ── Connection check ───────────────────────────
             let connectionChecked = false;
+            let authCheckInterval = null;
 
             function checkConnection() {
                 if (connectionChecked) return;
                 try {
-                    // Try to access iframe content — throws if cross-origin
-                    // (cross-origin means it's loading, which is success)
                     const doc = iframe.contentDocument || iframe.contentWindow?.document;
                     if (doc) {
-                        // Same-origin — pgAdmin loaded
                         onConnected();
                     }
                 } catch (e) {
-                    // Cross-origin — this is expected and means the page loaded
                     onConnected();
                 }
             }
@@ -254,20 +270,100 @@
                 statusBadge.className = 'status-badge connected';
                 statusBadge.textContent = '✓ Connected';
                 errorDiv.classList.add('hidden');
+
+                // Start background session refresh
+                startSessionRefresh();
+
+                // Start monitoring iframe for expired sessions
+                startAuthMonitor();
             }
 
-            // ── Handle errors ──────────────────────────────
-            let loadTimer = null;
+            // ── Auth monitor — detect 401 pages in iframe ──
+            function startAuthMonitor() {
+                if (authCheckInterval) clearInterval(authCheckInterval);
 
+                // Check every 30 seconds if the iframe has been hit
+                // with an auth failure page
+                authCheckInterval = setInterval(() => {
+                    checkIframeForAuthFailure();
+                }, 30 * 1000);
+            }
+
+            function stopAuthMonitor() {
+                if (authCheckInterval) {
+                    clearInterval(authCheckInterval);
+                    authCheckInterval = null;
+                }
+            }
+
+            function checkIframeForAuthFailure() {
+                if (!connectionChecked) return;
+                try {
+                    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+                    if (!doc) return;
+
+                    const body = doc.body;
+                    if (!body) return;
+
+                    const text = body.textContent || '';
+
+                    // pgAdmin itself renders a full UI — if the page is a
+                    // plain 401 error from the proxy, it'll have these markers
+                    if (text.includes('Unauthorized') &&
+                        (text.includes('Admin authentication') || text.includes('/pgadmin/auth'))) {
+
+                        console.warn('pgAdmin iframe shows 401 — session expired, re-authenticating…');
+                        handleAuthFailure();
+                    }
+                } catch (e) {
+                    // Cross-origin or DOM error — ignore
+                }
+            }
+
+            async function handleAuthFailure() {
+                stopSessionRefresh();
+                stopAuthMonitor();
+                connectionChecked = false;
+
+                statusBadge.className = 'status-badge connecting';
+                statusBadge.textContent = '⟳ Session expired — renewing…';
+
+                // Try to refresh the session silently
+                const ok = await refreshPgAdminSession();
+                if (ok) {
+                    // Cookie renewed — reload iframe
+                    App.showToast('Session renewed', 'success');
+                    iframe.src = pgAdminUrl;
+                    setTimeout(checkConnection, 5000);
+                } else {
+                    // Token itself has expired — redirect to login
+                    App.showToast('Your session has expired. Please log in again.', 'error');
+                    setTimeout(() => { window.location.href = 'login.html'; }, 2000);
+                }
+            }
+
+            // ── Also catch 401 on iframe navigation events ──
             iframe.addEventListener('load', () => {
-                clearTimeout(loadTimer);
-                // Small delay to ensure page is rendered
-                loadTimer = setTimeout(checkConnection, 1000);
+                if (connectionChecked) {
+                    // The iframe navigated (pgAdmin page change) — check
+                    // it's not a 401 page
+                    setTimeout(() => checkIframeForAuthFailure(), 500);
+                }
             });
 
-            iframe.addEventListener('error', () => {
-                showError();
-            });
+            // ── Error display ──────────────────────────────
+            function showAuthError(msg) {
+                skeleton.classList.add('hidden');
+                iframe.classList.add('hidden');
+                statusBadge.className = 'status-badge error';
+                statusBadge.textContent = '✗ Auth Failed';
+                errorDiv.classList.remove('hidden');
+                const msgEl = errorDiv.querySelector('p');
+                if (msgEl) {
+                    msgEl.innerHTML = 'Could not authenticate for pgAdmin access: <strong class="text-red-400">' +
+                        App.escapeHtml(msg) + '</strong>';
+                }
+            }
 
             function showError() {
                 if (connectionChecked) return;
@@ -280,6 +376,8 @@
 
             // ── Retry ──────────────────────────────────────
             window.retryConnection = function() {
+                stopSessionRefresh();
+                stopAuthMonitor();
                 connectionChecked = false;
                 iframe.classList.remove('hidden');
                 errorDiv.classList.add('hidden');
@@ -288,8 +386,13 @@
                 loadPgAdmin();
             };
 
+            // ── Clean up on page unload ────────────────────
+            window.addEventListener('beforeunload', () => {
+                stopSessionRefresh();
+                stopAuthMonitor();
+            });
+
             // ── Init ───────────────────────────────────────
-            // Start loading after a brief render delay
             setTimeout(loadPgAdmin, 100);
 
         })();
