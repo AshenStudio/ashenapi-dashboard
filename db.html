@@ -402,14 +402,10 @@ ORDER BY table_name;</textarea>
                     html += '<tr>';
                     row.forEach((cell, ci) => {
                         let cls = '';
-                        let val = 'NULL';
+                        let val;
                         if (cell === null || cell === undefined) {
                             cls = 'cell-null';
                             val = 'NULL';
-                        } else if (typeof cell === 'number' || (!isNaN(cell) && cell !== '' && columns[ci] && (columns[ci].toLowerCase().includes('count') || columns[ci].toLowerCase().includes('id')))) {
-                            // Try to detect numbers
-                            cls = 'cell-number';
-                            val = String(cell);
                         } else {
                             val = String(cell);
                         }
