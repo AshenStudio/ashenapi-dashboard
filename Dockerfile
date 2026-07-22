@@ -6,6 +6,9 @@
 # Usage in Portainer:
 #   Environment variable: API_URL=https://ashenapi.overdev.net
 
+# Use --build-arg CACHEBUST=$(date +%s) to force a clean rebuild
+ARG CACHEBUST=1
+
 FROM python:3-slim
 
 WORKDIR /app

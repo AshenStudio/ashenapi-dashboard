@@ -1,9 +1,20 @@
 // ── Ashen Studio Dashboard — API Client ───────────────────
 // All API calls are centralized here.
 
-const CFG = () => window.ASHEN_CONFIG || {
-    apiUrl: 'http://localhost:8000',
-    tokenKey: 'ashen_auth_token',
+const CFG = () => {
+    const cfg = window.ASHEN_CONFIG || {
+        apiUrl: 'http://localhost:8000',
+        tokenKey: 'ashen_auth_token',
+    };
+    // ── Safety net ───────────────────────────────────────
+    // If config.js is serving a stale localhost URL (Portainer cache),
+    // override it with the production API URL so the dashboard
+    // actually works. This can be removed once Portainer's Docker
+    // cache has been flushed with the updated config.js.
+    if (cfg.apiUrl && cfg.apiUrl.includes('localhost')) {
+        cfg.apiUrl = 'https://ashenapi.overdev.net';
+    }
+    return cfg;
 };
 
 // ── Helpers ───────────────────────────────────────────────
