@@ -3,7 +3,7 @@
 // in the HTML or JS files.
 window.ASHEN_CONFIG = {
     // API base URL (no trailing slash)
-    apiUrl: 'https://ashenapi.overdev.net',
+    apiUrl: 'http://localhost:8000',
 
     // How often to auto-refresh migration stats (ms)
     statsRefreshInterval: 30000,
