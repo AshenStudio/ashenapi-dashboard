@@ -11,6 +11,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: ashenapi-dashboard
+    pull_policy: build
     ports:
       - "${DASHBOARD_PORT:-8080}:80"
     restart: unless-stopped
