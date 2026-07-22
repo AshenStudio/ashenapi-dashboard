@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard · Ashen Studio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="config.js"></script>
+    <script src="api.js"></script>
+    <script src="app.js"></script>
+    <style>
+        body { background: #0f0f1a; }
+        .stat-card { transition: all 0.2s ease; }
+        .stat-card:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.3); }
+        .card-subtle { background: rgba(31, 41, 55, 0.6); border: 1px solid rgba(75, 85, 99, 0.3); }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.4s ease-out; }
+        @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        .pulse-dot { animation: pulse-dot 1.5s ease-in-out infinite; }
+        .stat-value { transition: all 0.3s ease; }
+        .stat-flash { background: rgba(255,255,255,0.1); border-radius: 0.5rem; padding: 0 0.25rem; }
+    </style>
+</head>
+<body class="min-h-screen text-gray-100">
+
+    <!-- Navigation -->
+    <nav class="bg-gray-900/90 backdrop-blur-sm border-b border-gray-800 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center space-x-8">
+                    <a href="index.html" class="flex items-center space-x-2 text-white font-bold text-lg">
+                        <span class="inline-flex items-center justify-center w-8 h-8 bg-indigo-600 rounded-lg">
+                            <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                            </svg>
+                        </span>
+                        <span>Ashen</span>
+                    </a>
+                    <div class="hidden md:flex space-x-1">
+                        <a href="index.html" class="nav-link px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-all">Dashboard</a>
+                        <a href="releases.html" class="nav-link px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-all">Releases</a>
+                        <a href="accounts.html" class="nav-link px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-all">Accounts</a>
+                        <a href="migrations.html" class="nav-link px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-all">Migrations</a>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <span class="text-sm text-gray-400 hidden sm:block" id="username-display"></span>
+                    <button onclick="logout()" class="js-auth-show px-3 py-1.5 text-sm text-gray-400 hover:text-red-400 hover:bg-red-900/30 rounded-lg transition-all">Logout</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Toast container -->
+    <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-8">
+            <div>
+                <h1 class="text-3xl font-bold text-white">Dashboard</h1>
+                <p class="text-gray-400 mt-1">At a glance view of the Ashen Studio platform.</p>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Current Releases -->
+            <div class="lg:col-span-2 card-subtle rounded-xl p-6">
+                <h2 class="text-lg font-semibold text-white mb-4">Current Releases</h2>
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg">
+                        <span class="text-gray-400 font-medium">Launcher</span>
+                        <span id="launcher-version" class="text-gray-300">Loading…</span>
+                    </div>
+                    <div class="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg">
+                        <span class="text-gray-400 font-medium">Modpack</span>
+                        <span id="modpack-version" class="text-gray-300">Loading…</span>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <a href="releases.html" class="text-indigo-400 hover:text-indigo-300 text-sm font-medium transition-colors">Manage releases →</a>
+                </div>
+            </div>
+
+            <!-- Migration Status -->
+            <div class="card-subtle rounded-xl p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-lg font-semibold text-white">Migration Status</h2>
+                    <button onclick="refreshStats()" id="refresh-btn" class="text-gray-400 hover:text-white transition-colors" title="Refresh">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                    </button>
+                </div>
+                <p class="text-gray-500 text-sm mb-4">Offline→premium upgrade queue.</p>
+                <div class="grid grid-cols-3 gap-2">
+                    <div class="stat-card text-center p-3 bg-amber-900/30 border border-amber-800/30 rounded-lg cursor-default">
+                        <div class="text-2xl font-bold text-amber-400 stat-value" id="stat-pending">—</div>
+                        <div class="text-xs text-amber-500/80 mt-1">Pending</div>
+                    </div>
+                    <div class="stat-card text-center p-3 bg-red-900/30 border border-red-800/30 rounded-lg cursor-default">
+                        <div class="text-2xl font-bold text-red-400 stat-value" id="stat-failed">—</div>
+                        <div class="text-xs text-red-500/80 mt-1">Failed</div>
+                    </div>
+                    <div class="stat-card text-center p-3 bg-emerald-900/30 border border-emerald-800/30 rounded-lg cursor-default">
+                        <div class="text-2xl font-bold text-emerald-400 stat-value" id="stat-completed">—</div>
+                        <div class="text-xs text-emerald-500/80 mt-1">Completed</div>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <a href="migrations.html" class="text-indigo-400 hover:text-indigo-300 text-sm font-medium transition-colors">Manage →</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="card-subtle rounded-xl p-6 mt-6">
+            <h2 class="text-lg font-semibold text-white mb-4">Quick Actions</h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <a href="releases.html?upload=launcher" class="block p-4 bg-gray-800/50 rounded-xl hover:bg-gray-700/50 transition-all text-center">
+                    <svg class="w-6 h-6 text-indigo-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                    </svg>
+                    <span class="text-sm text-gray-300">Upload Launcher</span>
+                </a>
+                <a href="releases.html?upload=modpack" class="block p-4 bg-gray-800/50 rounded-xl hover:bg-gray-700/50 transition-all text-center">
+                    <svg class="w-6 h-6 text-emerald-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                    </svg>
+                    <span class="text-sm text-gray-300">Upload Modpack</span>
+                </a>
+                <a href="accounts.html" class="block p-4 bg-gray-800/50 rounded-xl hover:bg-gray-700/50 transition-all text-center">
+                    <svg class="w-6 h-6 text-sky-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"/>
+                    </svg>
+                    <span class="text-sm text-gray-300">Manage Accounts</span>
+                </a>
+                <a href="migrations.html" class="block p-4 bg-gray-800/50 rounded-xl hover:bg-gray-700/50 transition-all text-center">
+                    <svg class="w-6 h-6 text-amber-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                    <span class="text-sm text-gray-300">Migrations</span>
+                </a>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        (function() {
+            'use strict';
+
+            if (!App.requireAuth()) return;
+
+            // Refresh interval
+            let refreshInterval = null;
+
+            async function loadData() {
+                try {
+                    const [launcher, modpack, counts] = await Promise.all([
+                        apiGetLatestLauncher(),
+                        apiGetLatestModpack(),
+                        apiGetMigrationCounts(),
+                    ]);
+
+                    document.getElementById('launcher-version').textContent = launcher?.version || '— none —';
+                    document.getElementById('modpack-version').textContent = modpack?.version || '— none —';
+
+                    if (counts) {
+                        updateStat('stat-pending', counts.pending);
+                        updateStat('stat-failed', counts.failed);
+                        updateStat('stat-completed', counts.completed);
+                    }
+                } catch (err) {
+                    console.warn('Failed to load dashboard data:', err);
+                }
+            }
+
+            function updateStat(id, value) {
+                const el = document.getElementById(id);
+                const oldVal = el.textContent;
+                el.textContent = value;
+                if (oldVal !== String(value)) {
+                    el.classList.add('stat-flash');
+                    setTimeout(() => el.classList.remove('stat-flash'), 600);
+                }
+            }
+
+            window.refreshStats = async function() {
+                const btn = document.getElementById('refresh-btn');
+                btn.disabled = true;
+                btn.classList.add('animate-spin');
+                try {
+                    const counts = await apiGetMigrationCounts();
+                    if (counts) {
+                        updateStat('stat-pending', counts.pending);
+                        updateStat('stat-failed', counts.failed);
+                        updateStat('stat-completed', counts.completed);
+                    }
+                } catch (e) {
+                    console.warn(e);
+                } finally {
+                    btn.disabled = false;
+                    btn.classList.remove('animate-spin');
+                }
+            };
+
+            // Load on init and auto-refresh
+            loadData();
+            refreshInterval = setInterval(loadData, window.ASHEN_CONFIG?.statsRefreshInterval || 30000);
+
+            // Cleanup on page unload
+            window.addEventListener('beforeunload', () => {
+                if (refreshInterval) clearInterval(refreshInterval);
+            });
+        })();
+    </script>
+</body>
+</html>

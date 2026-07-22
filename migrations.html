@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Migrations · Ashen Studio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="config.js"></script>
+    <script src="api.js"></script>
+    <script src="app.js"></script>
+    <style>
+        body { background: #0f0f1a; }
+        .card-subtle { background: rgba(31, 41, 55, 0.6); border: 1px solid rgba(75, 85, 99, 0.3); }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.4s ease-out; }
+        .table-hover tr:hover { background: rgba(55, 65, 81, 0.5); }
+        input, select { transition: all 0.2s ease; }
+        input:focus, select:focus { box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.3); }
+        .filter-tab { transition: all 0.2s ease; }
+        .filter-tab-active { background: rgba(99, 102, 241, 0.2); border-color: #6366f1; color: #a5b4fc; }
+        .modal-overlay { animation: fadeIn 0.2s ease-out; }
+    </style>
+</head>
+<body class="min-h-screen text-gray-100">
+
+    <!-- Navigation -->
+    <nav class="bg-gray-900/90 backdrop-blur-sm border-b border-gray-800 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center space-x-8">
+                    <a href="index.html" class="flex items-center space-x-2 text-white font-bold text-lg">
+                        <span class="inline-flex items-center justify-center w-8 h-8 bg-indigo-600 rounded-lg">
+                            <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                            </svg>
+                        </span>
+                        <span>Ashen</span>
+                    </a>
+                    <div class="hidden md:flex space-x-1">
+                        <a href="index.html" class="nav-link px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-all">Dashboard</a>
+                        <a href="releases.html" class="nav-link px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-all">Releases</a>
+                        <a href="accounts.html" class="nav-link px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-all">Accounts</a>
+                        <a href="migrations.html" class="nav-link px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-all">Migrations</a>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <button onclick="logout()" class="js-auth-show px-3 py-1.5 text-sm text-gray-400 hover:text-red-400 hover:bg-red-900/30 rounded-lg transition-all">Logout</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
+        <div class="flex items-center justify-between mb-8">
+            <div>
+                <h1 class="text-3xl font-bold text-white">Migration Management</h1>
+                <p class="text-gray-400 mt-1">Offline→premium upgrade events and retry queue.</p>
+            </div>
+        </div>
+
+        <!-- Success/Error Messages -->
+        <div id="success-message" class="hidden bg-emerald-900/50 border border-emerald-700/50 text-emerald-300 px-4 py-3 rounded-lg text-sm mb-6"></div>
+        <div id="error-message" class="hidden bg-red-900/50 border border-red-700/50 text-red-300 px-4 py-3 rounded-lg text-sm mb-6"></div>
+
+        <!-- Stats Bar -->
+        <div class="grid grid-cols-3 gap-4 mb-6">
+            <div class="text-center p-4 bg-amber-900/30 border border-amber-800/30 rounded-xl">
+                <div class="text-3xl font-bold text-amber-400" id="stat-pending">—</div>
+                <div class="text-xs text-amber-500/80 mt-1">Pending</div>
+            </div>
+            <div class="text-center p-4 bg-red-900/30 border border-red-800/30 rounded-xl">
+                <div class="text-3xl font-bold text-red-400" id="stat-failed">—</div>
+                <div class="text-xs text-red-500/80 mt-1">Failed</div>
+            </div>
+            <div class="text-center p-4 bg-emerald-900/30 border border-emerald-800/30 rounded-xl">
+                <div class="text-3xl font-bold text-emerald-400" id="stat-completed">—</div>
+                <div class="text-xs text-emerald-500/80 mt-1">Completed</div>
+            </div>
+        </div>
+
+        <!-- Toolbar -->
+        <div class="card-subtle rounded-xl p-4 mb-6">
+            <div class="flex flex-wrap items-center gap-3">
+                <!-- Filter tabs -->
+                <div class="flex space-x-1">
+                    <button onclick="setFilter('')" class="filter-tab px-3 py-1.5 text-sm rounded-lg border border-gray-600 text-gray-400 hover:text-white hover:border-gray-500 transition-all" data-filter="">All</button>
+                    <button onclick="setFilter('Pending')" class="filter-tab px-3 py-1.5 text-sm rounded-lg border border-gray-600 text-gray-400 hover:text-white hover:border-gray-500 transition-all" data-filter="Pending">Pending</button>
+                    <button onclick="setFilter('Failed')" class="filter-tab px-3 py-1.5 text-sm rounded-lg border border-gray-600 text-gray-400 hover:text-white hover:border-gray-500 transition-all" data-filter="Failed">Failed</button>
+                    <button onclick="setFilter('Completed')" class="filter-tab px-3 py-1.5 text-sm rounded-lg border border-gray-600 text-gray-400 hover:text-white hover:border-gray-500 transition-all" data-filter="Completed">Completed</button>
+                </div>
+
+                <!-- Search -->
+                <div class="flex-1 min-w-[200px]">
+                    <input type="text" id="search-input" placeholder="Search username or UUID…"
+                           class="w-full px-3 py-1.5 bg-gray-700/50 border border-gray-600 rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-indigo-500" />
+                </div>
+
+                <!-- Bulk actions -->
+                <button onclick="retryAllFailed()" id="btn-retry-failed" class="px-3 py-1.5 text-sm bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 rounded-lg border border-amber-700/30 transition-all">↻ Retry All Failed</button>
+                <button onclick="retryAllPending()" id="btn-retry-pending" class="px-3 py-1.5 text-sm bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 rounded-lg border border-amber-700/30 transition-all">◌ Retry All Pending</button>
+            </div>
+        </div>
+
+        <!-- Migration Logs -->
+        <div class="card-subtle rounded-xl p-6 mb-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-semibold text-white">Migration Logs</h2>
+                <span class="text-sm text-gray-500" id="page-info">Loading…</span>
+            </div>
+            <div id="logs-container">
+                <div class="text-center py-8 text-gray-500">Loading migration logs…</div>
+            </div>
+            <div id="pagination" class="flex items-center justify-between mt-4 pt-4 border-t border-gray-700/50 hidden">
+                <span class="text-sm text-gray-500" id="total-info"></span>
+                <div class="flex items-center space-x-2" id="page-buttons"></div>
+            </div>
+        </div>
+
+        <!-- Force Migrate -->
+        <div class="card-subtle rounded-xl p-6 mb-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-semibold text-white">Force Migrate</h2>
+                <span class="text-sm text-gray-500">Manually queue a migration for the server to process</span>
+            </div>
+            <form id="force-migrate-form" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                <div>
+                    <label class="block text-xs text-gray-400 mb-1">Old UUID (source)</label>
+                    <input type="text" id="force-old-uuid" required pattern="[0-9a-fA-F\-]{36}" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                           class="w-full px-3 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white text-sm font-mono focus:outline-none focus:border-indigo-500" />
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-400 mb-1">New UUID (target)</label>
+                    <input type="text" id="force-new-uuid" required pattern="[0-9a-fA-F\-]{36}" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                           class="w-full px-3 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white text-sm font-mono focus:outline-none focus:border-indigo-500" />
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-400 mb-1">Minecraft Username</label>
+                    <input type="text" id="force-username" required maxlength="32" placeholder="Player name"
+                           class="w-full px-3 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500" />
+                </div>
+                <button type="submit" class="px-4 py-2 bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 rounded-lg border border-amber-700/30 transition-all text-sm font-medium">↻ Queue Force Migrate</button>
+            </form>
+        </div>
+
+        <!-- Retry Request History -->
+        <div class="card-subtle rounded-xl p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-semibold text-white">Recent Retry Requests</h2>
+                <span class="text-sm text-gray-500">Last 20 requests processed by the server</span>
+            </div>
+            <div id="retry-container">
+                <div class="text-center py-8 text-gray-500">Loading retry requests…</div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Detail Modal -->
+    <div id="detailModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden items-center justify-center p-4 modal-overlay" onclick="closeDetail(event)">
+        <div class="bg-gray-800 rounded-2xl w-full max-w-lg p-6 border border-gray-700 shadow-2xl" onclick="event.stopPropagation()">
+            <div class="flex items-center justify-between mb-6">
+                <h3 class="text-xl font-semibold text-white">Migration Details</h3>
+                <button onclick="closeDetail()" class="text-gray-400 hover:text-white transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <div class="space-y-3" id="detail-body"></div>
+            <div class="mt-6 text-center">
+                <button onclick="closeDetail()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-all text-sm">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            'use strict';
+
+            if (!App.requireAuth()) return;
+
+            // ── State ───────────────────────────────────────
+            let currentPage = 1;
+            const pageSize = 20;
+            let totalCount = 0;
+            let statusFilter = '';
+            let searchQuery = '';
+            let searchTimer = null;
+
+            // ── Load Data ───────────────────────────────────
+            async function loadAll() {
+                await Promise.all([loadStats(), loadLogs(), loadRetryRequests()]);
+            }
+
+            async function loadStats() {
+                try {
+                    const counts = await apiGetMigrationCounts();
+                    if (counts) {
+                        document.getElementById('stat-pending').textContent = counts.pending ?? 0;
+                        document.getElementById('stat-failed').textContent = counts.failed ?? 0;
+                        document.getElementById('stat-completed').textContent = counts.completed ?? 0;
+                    }
+                } catch (e) {
+                    console.warn('Failed to load stats:', e);
+                }
+            }
+
+            async function loadLogs() {
+                try {
+                    const data = await apiListMigrations(currentPage, pageSize);
+                    if (!data) throw new Error('Failed to load logs');
+
+                    let logs = data.logs || [];
+                    totalCount = data.total_count || 0;
+
+                    // Client-side filter by status
+                    if (statusFilter) {
+                        logs = logs.filter(l => l.status === statusFilter);
+                        totalCount = logs.length;
+                    }
+
+                    // Client-side search
+                    if (searchQuery) {
+                        const q = searchQuery.toLowerCase();
+                        logs = logs.filter(l =>
+                            (l.minecraft_username && l.minecraft_username.toLowerCase().includes(q)) ||
+                            (l.account_username && l.account_username.toLowerCase().includes(q)) ||
+                            (l.old_offline_uuid && l.old_offline_uuid.toLowerCase().includes(q)) ||
+                            (l.new_premium_uuid && l.new_premium_uuid.toLowerCase().includes(q))
+                        );
+                        totalCount = logs.length;
+                    }
+
+                    renderLogs(logs);
+                    renderPagination();
+                } catch (err) {
+                    document.getElementById('logs-container').innerHTML =
+                        '<div class="text-center py-8 text-red-400">' + App.escapeHtml(err.message) + '</div>';
+                }
+            }
+
+            async function loadRetryRequests() {
+                try {
+                    const data = await apiListRetryRequests(1, 20);
+                    if (!data) throw new Error('Failed to load retry requests');
+                    renderRetryRequests(data.requests || []);
+                } catch (err) {
+                    document.getElementById('retry-container').innerHTML =
+                        '<div class="text-center py-8 text-red-400">' + App.escapeHtml(err.message) + '</div>';
+                }
+            }
+
+            // ── Render Functions ────────────────────────────
+            function renderLogs(logs) {
+                const container = document.getElementById('logs-container');
+                if (!logs.length) {
+                    container.innerHTML = '<p class="text-gray-500 py-4">No migration events found matching your criteria.</p>';
+                    return;
+                }
+
+                let html = '<div class="overflow-x-auto"><table class="w-full table-hover"><thead>' +
+                    '<tr class="text-left text-xs text-gray-500 uppercase tracking-wider border-b border-gray-700">' +
+                    '<th class="pb-3 pr-3">Account / Username</th>' +
+                    '<th class="pb-3 pr-3">Old UUID</th>' +
+                    '<th class="pb-3 pr-3">New UUID</th>' +
+                    '<th class="pb-3 pr-3">Status</th>' +
+                    '<th class="pb-3 pr-3">Started</th>' +
+                    '<th class="pb-3 pr-3">Error</th>' +
+                    '<th class="pb-3 pr-3">Actions</th>' +
+                    '</tr></thead><tbody class="divide-y divide-gray-700/50">';
+
+                logs.forEach(m => {
+                    const rowClass = m.status === 'Failed' ? 'bg-red-900/10' :
+                        m.status === 'Pending' ? 'bg-amber-900/10' : '';
+                    const oldUuidShort = m.old_offline_uuid ? m.old_offline_uuid.slice(0, 8) + '…' : '—';
+                    const newUuidShort = m.new_premium_uuid ? m.new_premium_uuid.slice(0, 8) + '…' : '—';
+                    const errMsg = m.error_message ? App.truncate(m.error_message, 40) : '—';
+
+                    html += `<tr class="text-sm ${rowClass}">
+                        <td class="py-3 pr-3">
+                            <div class="font-medium text-gray-200">${App.escapeHtml(m.minecraft_username || '—')}</div>
+                            <div class="text-xs text-gray-500">${App.escapeHtml(m.account_username || '')}</div>
+                        </td>
+                        <td class="py-3 pr-3"><code class="text-xs text-gray-400 cursor-pointer js-copy" data-value="${App.escapeHtml(m.old_offline_uuid || '')}" title="Click to copy">${oldUuidShort}</code></td>
+                        <td class="py-3 pr-3"><code class="text-xs text-gray-400 cursor-pointer js-copy" data-value="${App.escapeHtml(m.new_premium_uuid || '')}" title="Click to copy">${newUuidShort}</code></td>
+                        <td class="py-3 pr-3">${statusBadge(m.status)}</td>
+                        <td class="py-3 pr-3 text-xs text-gray-400 font-mono">${App.formatShortDate(m.created_at)}</td>
+                        <td class="py-3 pr-3 text-xs ${m.error_message ? 'text-red-400' : 'text-gray-600'}">${App.escapeHtml(errMsg)}</td>
+                        <td class="py-3 pr-3 flex space-x-2">
+                            ${m.status !== 'Completed' ? `<button onclick="retrySingle('${m.id}')" class="text-xs text-amber-400 hover:text-amber-300 transition-colors">↻ Retry</button>` : ''}
+                            <button onclick="showDetail('${m.id}', '${App.escapeHtml(m.minecraft_username || '')}', '${App.escapeHtml(m.old_offline_uuid || '')}', '${App.escapeHtml(m.new_premium_uuid || '')}', '${m.status}', '${App.formatDate(m.created_at)}', '${App.formatDate(m.completed_at)}', '${App.escapeHtml(m.error_message || '')}')" class="text-xs text-gray-400 hover:text-white transition-colors" title="View details">≡</button>
+                        </td>
+                    </tr>`;
+                });
+
+                html += '</tbody></table></div>';
+                container.innerHTML = html;
+            }
+
+            function statusBadge(status) {
+                if (status === 'Completed') return '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-900/50 text-emerald-400 border border-emerald-700/30">✓ Completed</span>';
+                if (status === 'Failed') return '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-900/50 text-red-400 border border-red-700/30">✗ Failed</span>';
+                return '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-900/50 text-amber-400 border border-amber-700/30">◌ Pending</span>';
+            }
+
+            function renderPagination() {
+                const pageCount = totalCount === 0 ? 1 : Math.ceil(totalCount / pageSize);
+                const pagination = document.getElementById('pagination');
+                const pageInfo = document.getElementById('page-info');
+                const totalInfo = document.getElementById('total-info');
+                const buttons = document.getElementById('page-buttons');
+
+                pageInfo.textContent = `Page ${currentPage} of ${pageCount}`;
+                totalInfo.textContent = `${totalCount} total logs`;
+                pagination.classList.remove('hidden');
+
+                let html = '';
+                if (currentPage > 1) {
+                    html += `<button onclick="goToPage(${currentPage - 1})" class="px-3 py-1.5 text-sm text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-all">← Prev</button>`;
+                }
+                html += `<span class="text-sm text-gray-500">Page ${currentPage} of ${pageCount}</span>`;
+                if (currentPage < pageCount) {
+                    html += `<button onclick="goToPage(${currentPage + 1})" class="px-3 py-1.5 text-sm text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-all">Next →</button>`;
+                }
+                buttons.innerHTML = html;
+            }
+
+            function renderRetryRequests(requests) {
+                const container = document.getElementById('retry-container');
+                if (!requests.length) {
+                    container.innerHTML = '<p class="text-gray-500 py-4">No retry requests yet.</p>';
+                    return;
+                }
+
+                let html = '<div class="overflow-x-auto"><table class="w-full table-hover"><thead>' +
+                    '<tr class="text-left text-xs text-gray-500 uppercase tracking-wider border-b border-gray-700">' +
+                    '<th class="pb-3 pr-3">Type</th><th class="pb-3 pr-3">Target</th>' +
+                    '<th class="pb-3 pr-3">Status</th><th class="pb-3 pr-3">Result</th>' +
+                    '<th class="pb-3 pr-3">Requested</th><th class="pb-3 pr-3">Completed</th>' +
+                    '</tr></thead><tbody class="divide-y divide-gray-700/50">';
+
+                requests.forEach(r => {
+                    const target = r.minecraft_username ||
+                        (r.retry_type === 'all-failed' ? 'All failed' :
+                         r.retry_type === 'all-pending' ? 'All pending' : '—');
+                    html += `<tr class="text-sm">
+                        <td class="py-3 pr-3"><code class="text-xs text-gray-300">${App.escapeHtml(r.retry_type)}</code></td>
+                        <td class="py-3 pr-3 text-gray-400">${App.escapeHtml(target)}</td>
+                        <td class="py-3 pr-3">${retryStatusBadge(r.status)}</td>
+                        <td class="py-3 pr-3 text-xs text-gray-400">${r.result_message ? App.truncate(r.result_message, 50) : '<span class="text-gray-600">—</span>'}</td>
+                        <td class="py-3 pr-3 text-xs text-gray-500 font-mono">${App.formatShortDate(r.created_at)}</td>
+                        <td class="py-3 pr-3 text-xs text-gray-500 font-mono">${r.completed_at ? App.formatShortDate(r.completed_at) : '—'}</td>
+                    </tr>`;
+                });
+
+                html += '</tbody></table></div>';
+                container.innerHTML = html;
+            }
+
+            function retryStatusBadge(status) {
+                if (status === 'Completed') return '<span class="text-emerald-400 text-xs">✓ Done</span>';
+                if (status === 'Failed') return '<span class="text-red-400 text-xs">✗ Failed</span>';
+                if (status === 'InProgress') return '<span class="text-amber-400 text-xs">◌ Running</span>';
+                return '<span class="text-amber-400 text-xs">◌ Queued</span>';
+            }
+
+            // ── Navigation ──────────────────────────────────
+            window.goToPage = function(page) {
+                currentPage = page;
+                loadLogs();
+            };
+
+            window.setFilter = function(status) {
+                statusFilter = status;
+                currentPage = 1;
+                // Update tab styles
+                document.querySelectorAll('.filter-tab').forEach(tab => {
+                    const isActive = tab.getAttribute('data-filter') === status;
+                    tab.className = `filter-tab px-3 py-1.5 text-sm rounded-lg border transition-all ${
+                        isActive
+                            ? 'filter-tab-active border-indigo-500 text-indigo-300 bg-indigo-900/30'
+                            : 'border-gray-600 text-gray-400 hover:text-white hover:border-gray-500'
+                    }`;
+                });
+                loadLogs();
+            };
+
+            // Search with debounce
+            document.getElementById('search-input').addEventListener('input', () => {
+                clearTimeout(searchTimer);
+                searchTimer = setTimeout(() => {
+                    searchQuery = document.getElementById('search-input').value.trim();
+                    currentPage = 1;
+                    loadLogs();
+                }, 300);
+            });
+
+            // ── Actions ─────────────────────────────────────
+            window.retrySingle = async function(id) {
+                try {
+                    await apiCreateRetryRequest({ retry_type: 'single', migration_log_id: id });
+                    App.showToast('Retry request created. The server will process it shortly.', 'success');
+                } catch (err) {
+                    App.showToast(err.message || 'Failed to create retry request', 'error');
+                }
+            };
+
+            window.retryAllFailed = async function() {
+                try {
+                    await apiCreateRetryRequest({ retry_type: 'all-failed' });
+                    App.showToast('Retry-all-failed request created. The server will process it shortly.', 'success');
+                } catch (err) {
+                    App.showToast(err.message || 'Failed to create retry request', 'error');
+                }
+            };
+
+            window.retryAllPending = async function() {
+                try {
+                    await apiCreateRetryRequest({ retry_type: 'all-pending' });
+                    App.showToast('Retry-all-pending request created. The server will process it shortly.', 'success');
+                } catch (err) {
+                    App.showToast(err.message || 'Failed to create retry request', 'error');
+                }
+            };
+
+            // ── Force Migrate ───────────────────────────────
+            document.getElementById('force-migrate-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const oldUuid = document.getElementById('force-old-uuid').value.trim();
+                const newUuid = document.getElementById('force-new-uuid').value.trim();
+                const username = document.getElementById('force-username').value.trim();
+
+                // Basic UUID validation
+                const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                if (!uuidRegex.test(oldUuid) || !uuidRegex.test(newUuid)) {
+                    App.showToast('Invalid UUID format. Please enter valid UUIDs.', 'error');
+                    return;
+                }
+
+                try {
+                    await apiCreateRetryRequest({
+                        retry_type: 'force-migrate',
+                        old_uuid: oldUuid,
+                        new_uuid: newUuid,
+                        minecraft_username: username,
+                    });
+                    App.showToast(`Force-migrate request created for ${username}.`, 'success');
+                    document.getElementById('force-migrate-form').reset();
+                } catch (err) {
+                    App.showToast(err.message || 'Failed to create force migrate request', 'error');
+                }
+            });
+
+            // ── Detail Modal ────────────────────────────────
+            window.showDetail = function(id, username, oldUuid, newUuid, status, created, completed, error) {
+                const body = document.getElementById('detail-body');
+                body.innerHTML = `
+                    <div class="flex justify-between text-sm py-2 border-b border-gray-700/50">
+                        <span class="text-gray-400">Migration ID</span>
+                        <code class="text-gray-200 text-xs">${App.escapeHtml(id)}</code>
+                    </div>
+                    <div class="flex justify-between text-sm py-2 border-b border-gray-700/50">
+                        <span class="text-gray-400">Minecraft Username</span>
+                        <span class="text-gray-200">${App.escapeHtml(username || '—')}</span>
+                    </div>
+                    <div class="flex justify-between text-sm py-2 border-b border-gray-700/50">
+                        <span class="text-gray-400">Old UUID</span>
+                        <code class="text-gray-200 text-xs cursor-pointer js-copy" data-value="${App.escapeHtml(oldUuid)}">${App.escapeHtml(oldUuid)}</code>
+                    </div>
+                    <div class="flex justify-between text-sm py-2 border-b border-gray-700/50">
+                        <span class="text-gray-400">New UUID</span>
+                        <code class="text-gray-200 text-xs cursor-pointer js-copy" data-value="${App.escapeHtml(newUuid)}">${App.escapeHtml(newUuid)}</code>
+                    </div>
+                    <div class="flex justify-between text-sm py-2 border-b border-gray-700/50">
+                        <span class="text-gray-400">Status</span>
+                        <span>${statusBadge(status)}</span>
+                    </div>
+                    <div class="flex justify-between text-sm py-2 border-b border-gray-700/50">
+                        <span class="text-gray-400">Created</span>
+                        <span class="text-gray-200 font-mono text-xs">${App.escapeHtml(created)}</span>
+                    </div>
+                    <div class="flex justify-between text-sm py-2 border-b border-gray-700/50">
+                        <span class="text-gray-400">Completed</span>
+                        <span class="text-gray-200 font-mono text-xs">${App.escapeHtml(completed || '—')}</span>
+                    </div>
+                    <div class="flex justify-between text-sm py-2">
+                        <span class="text-gray-400">Error Message</span>
+                        <span class="${error ? 'text-red-400' : 'text-gray-600'} text-xs max-w-[250px] text-right">${App.escapeHtml(error || '—')}</span>
+                    </div>
+                `;
+                document.getElementById('detailModal').classList.remove('hidden');
+                document.getElementById('detailModal').classList.add('flex');
+            };
+
+            window.closeDetail = function(e) {
+                if (e && e.target !== e.currentTarget) return;
+                document.getElementById('detailModal').classList.add('hidden');
+                document.getElementById('detailModal').classList.remove('flex');
+            };
+
+            // ── Init ────────────────────────────────────────
+            loadAll();
+        })();
+    </script>
+</body>
+</html>

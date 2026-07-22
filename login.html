@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sign In · Ashen Studio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="config.js"></script>
+    <script src="api.js"></script>
+    <script src="app.js"></script>
+    <style>
+        body { background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%); }
+        .card-glow { box-shadow: 0 0 30px rgba(99, 102, 241, 0.15); }
+        .input-field { transition: all 0.2s ease; }
+        .input-field:focus { box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.3); }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.5s ease-out; }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-md animate-fade-in">
+        <!-- Logo / Brand -->
+        <div class="text-center mb-8">
+            <div class="inline-flex items-center justify-center w-16 h-16 bg-indigo-600 rounded-2xl shadow-lg mb-4">
+                <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                </svg>
+            </div>
+            <h1 class="text-3xl font-bold text-white">Ashen Studio</h1>
+            <p class="text-gray-400 mt-1">Administrative Dashboard</p>
+        </div>
+
+        <!-- Login Card -->
+        <div class="bg-gray-800/80 backdrop-blur-sm rounded-2xl p-8 card-glow border border-gray-700/50">
+            <h2 class="text-xl font-semibold text-white mb-6">Sign In</h2>
+
+            <!-- Error Message -->
+            <div id="error-message" class="hidden bg-red-900/50 border border-red-700/50 text-red-300 px-4 py-3 rounded-lg text-sm mb-6"></div>
+
+            <form id="login-form" class="space-y-5">
+                <div>
+                    <label for="username" class="block text-sm font-medium text-gray-300 mb-1.5">Username</label>
+                    <input
+                        type="text"
+                        id="username"
+                        name="username"
+                        autocomplete="username"
+                        required
+                        class="input-field w-full px-4 py-2.5 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors"
+                        placeholder="Enter your username"
+                    />
+                </div>
+
+                <div>
+                    <label for="password" class="block text-sm font-medium text-gray-300 mb-1.5">Password</label>
+                    <input
+                        type="password"
+                        id="password"
+                        name="password"
+                        autocomplete="current-password"
+                        required
+                        class="input-field w-full px-4 py-2.5 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors"
+                        placeholder="Enter your password"
+                    />
+                </div>
+
+                <button
+                    type="submit"
+                    id="submit-btn"
+                    class="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    <span id="btn-text">Sign In</span>
+                    <svg id="btn-spinner" class="hidden animate-spin h-5 w-5 mx-auto text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                </button>
+            </form>
+        </div>
+
+        <p class="text-center text-gray-500 text-xs mt-6">Ashen Studio © 2026</p>
+    </div>
+
+    <script>
+        (function() {
+            'use strict';
+
+            const form = document.getElementById('login-form');
+            const errorEl = document.getElementById('error-message');
+            const submitBtn = document.getElementById('submit-btn');
+            const btnText = document.getElementById('btn-text');
+            const btnSpinner = document.getElementById('btn-spinner');
+
+            // If already logged in, redirect to dashboard
+            if (isAuthenticated()) {
+                window.location.href = 'index.html';
+                return;
+            }
+
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                errorEl.classList.add('hidden');
+
+                const username = document.getElementById('username').value.trim();
+                const password = document.getElementById('password').value;
+
+                if (!username || !password) {
+                    showError('Please enter both username and password.');
+                    return;
+                }
+
+                // Loading state
+                submitBtn.disabled = true;
+                btnText.classList.add('hidden');
+                btnSpinner.classList.remove('hidden');
+
+                try {
+                    const data = await apiLogin(username, password);
+                    if (data) {
+                        window.location.href = 'index.html';
+                    } else {
+                        showError('Invalid username or password.');
+                    }
+                } catch (err) {
+                    showError(err.message || 'Connection failed. Is the API running?');
+                } finally {
+                    submitBtn.disabled = false;
+                    btnText.classList.remove('hidden');
+                    btnSpinner.classList.add('hidden');
+                }
+            });
+
+            function showError(msg) {
+                errorEl.textContent = msg;
+                errorEl.classList.remove('hidden');
+            }
+        })();
+    </script>
+</body>
+</html>

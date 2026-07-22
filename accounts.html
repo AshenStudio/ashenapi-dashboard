@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Accounts · Ashen Studio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="config.js"></script>
+    <script src="api.js"></script>
+    <script src="app.js"></script>
+    <style>
+        body { background: #0f0f1a; }
+        .card-subtle { background: rgba(31, 41, 55, 0.6); border: 1px solid rgba(75, 85, 99, 0.3); }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.4s ease-out; }
+        .table-hover tr:hover { background: rgba(55, 65, 81, 0.5); }
+        input { transition: all 0.2s ease; }
+        input:focus { box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.3); }
+    </style>
+</head>
+<body class="min-h-screen text-gray-100">
+
+    <nav class="bg-gray-900/90 backdrop-blur-sm border-b border-gray-800 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center space-x-8">
+                    <a href="index.html" class="flex items-center space-x-2 text-white font-bold text-lg">
+                        <span class="inline-flex items-center justify-center w-8 h-8 bg-indigo-600 rounded-lg">
+                            <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                            </svg>
+                        </span>
+                        <span>Ashen</span>
+                    </a>
+                    <div class="hidden md:flex space-x-1">
+                        <a href="index.html" class="nav-link px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-all">Dashboard</a>
+                        <a href="releases.html" class="nav-link px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-all">Releases</a>
+                        <a href="accounts.html" class="nav-link px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-all">Accounts</a>
+                        <a href="migrations.html" class="nav-link px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-all">Migrations</a>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <button onclick="logout()" class="js-auth-show px-3 py-1.5 text-sm text-gray-400 hover:text-red-400 hover:bg-red-900/30 rounded-lg transition-all">Logout</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
+        <div class="flex items-center justify-between mb-8">
+            <div>
+                <h1 class="text-3xl font-bold text-white">Accounts</h1>
+                <p class="text-gray-400 mt-1">Manage user accounts.</p>
+            </div>
+        </div>
+
+        <!-- Error message -->
+        <div id="error-message" class="hidden bg-red-900/50 border border-red-700/50 text-red-300 px-4 py-3 rounded-lg text-sm mb-6"></div>
+
+        <!-- Accounts Table -->
+        <div class="card-subtle rounded-xl p-6">
+            <div id="accounts-container">
+                <div class="text-center py-8 text-gray-500">Loading accounts…</div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Reset Password Modal -->
+    <div id="resetModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden items-center justify-center p-4" onclick="closeReset(event)">
+        <div class="bg-gray-800 rounded-2xl w-full max-w-md p-6 border border-gray-700 shadow-2xl" onclick="event.stopPropagation()">
+            <div class="flex items-center justify-between mb-6">
+                <h3 class="text-xl font-semibold text-white">Reset Password</h3>
+                <button onclick="closeReset()" class="text-gray-400 hover:text-white transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+
+            <div id="reset-result" class="hidden bg-emerald-900/50 border border-emerald-700/50 text-emerald-300 px-4 py-3 rounded-lg text-sm mb-4">
+                <p class="font-medium mb-1">New password set:</p>
+                <code id="new-password-display" class="text-lg block text-center py-2 font-mono bg-gray-900/50 rounded"></code>
+                <p class="text-xs text-emerald-500/80 mt-2">Copy this value securely. It won't be shown again.</p>
+            </div>
+
+            <form id="reset-form" class="space-y-4">
+                <input type="hidden" id="reset-id" value="" />
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1.5">Account</label>
+                    <input type="text" id="reset-username" readonly class="w-full px-4 py-2.5 bg-gray-700/30 border border-gray-600 rounded-lg text-gray-400" />
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1.5">New Password (leave blank to generate)</label>
+                    <input type="text" id="reset-password" class="w-full px-4 py-2.5 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-indigo-500" />
+                </div>
+                <button type="submit" id="reset-btn" class="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-lg transition-all disabled:opacity-50">
+                    <span id="reset-btn-text">Reset Password</span>
+                    <svg id="reset-spinner" class="hidden animate-spin h-5 w-5 mx-auto text-white" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                    </svg>
+                </button>
+            </form>
+
+            <div class="mt-4 text-center">
+                <button onclick="closeReset()" class="text-sm text-gray-400 hover:text-white transition-colors">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            'use strict';
+
+            if (!App.requireAuth()) return;
+
+            let currentPage = 1;
+            let pageSize = window.ASHEN_CONFIG?.defaultPageSize || 20;
+            let totalCount = 0;
+            let accounts = [];
+
+            async function loadAccounts() {
+                try {
+                    const data = await apiListAccounts(currentPage, pageSize);
+                    if (!data) throw new Error('Failed to load accounts');
+
+                    accounts = data.accounts || [];
+                    totalCount = data.total_count || 0;
+                    renderTable();
+                } catch (err) {
+                    document.getElementById('accounts-container').innerHTML =
+                        '<div class="text-center py-8 text-red-400">Failed to load accounts: ' + App.escapeHtml(err.message) + '</div>';
+                }
+            }
+
+            function renderTable() {
+                const container = document.getElementById('accounts-container');
+                const pageCount = totalCount === 0 ? 1 : Math.ceil(totalCount / pageSize);
+
+                if (!accounts.length) {
+                    container.innerHTML = '<p class="text-gray-500 py-4">No accounts yet.</p>';
+                    return;
+                }
+
+                let html = `
+                    <div class="overflow-x-auto">
+                        <table class="w-full table-hover">
+                            <thead>
+                                <tr class="text-left text-xs text-gray-500 uppercase tracking-wider border-b border-gray-700">
+                                    <th class="pb-3 pr-4">Username</th>
+                                    <th class="pb-3 pr-4">Created</th>
+                                    <th class="pb-3 pr-4">Identities</th>
+                                    <th class="pb-3 pr-4">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-700/50">
+                `;
+
+                accounts.forEach(a => {
+                    html += `
+                        <tr class="text-sm">
+                            <td class="py-3 pr-4 font-medium text-gray-200">${App.escapeHtml(a.username)}</td>
+                            <td class="py-3 pr-4 text-gray-400">${App.formatDate(a.created_at)}</td>
+                            <td class="py-3 pr-4 text-gray-400">${a.identity_count ?? 0}</td>
+                            <td class="py-3 pr-4 flex space-x-3">
+                                <button onclick="openReset('${a.id}', '${App.escapeHtml(a.username)}')"
+                                        class="text-indigo-400 hover:text-indigo-300 transition-colors text-sm font-medium">Reset password</button>
+                                <button onclick="deleteAccount('${a.id}')"
+                                        class="text-red-400 hover:text-red-300 transition-colors text-sm font-medium">Delete</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+
+                html += `
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="flex items-center justify-between mt-4 pt-4 border-t border-gray-700/50">
+                        <span class="text-sm text-gray-500">${totalCount} total accounts</span>
+                        <div class="flex items-center space-x-2">
+                `;
+
+                if (currentPage > 1) {
+                    html += `<button onclick="goToPage(${currentPage - 1})" class="px-3 py-1.5 text-sm text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-all">← Prev</button>`;
+                }
+                html += `<span class="text-sm text-gray-500">Page ${currentPage} of ${pageCount}</span>`;
+                if (currentPage < pageCount) {
+                    html += `<button onclick="goToPage(${currentPage + 1})" class="px-3 py-1.5 text-sm text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-all">Next →</button>`;
+                }
+
+                html += `
+                        </div>
+                    </div>
+                `;
+
+                container.innerHTML = html;
+            }
+
+            window.goToPage = function(page) {
+                currentPage = page;
+                loadAccounts();
+            };
+
+            // ── Delete Account ──────────────────────────────
+            window.deleteAccount = async function(id) {
+                if (!confirm('Delete this account? All associated data will be removed. This cannot be undone.')) return;
+                try {
+                    await apiDeleteAccount(id);
+                    App.showToast('Account deleted', 'success');
+                    loadAccounts();
+                } catch (err) {
+                    App.showToast(err.message || 'Failed to delete account', 'error');
+                }
+            };
+
+            // ── Reset Password ──────────────────────────────
+            window.openReset = function(id, username) {
+                document.getElementById('reset-id').value = id;
+                document.getElementById('reset-username').value = username;
+                document.getElementById('reset-password').value = '';
+                document.getElementById('reset-result').classList.add('hidden');
+                document.getElementById('reset-form').classList.remove('hidden');
+                document.getElementById('resetModal').classList.remove('hidden');
+                document.getElementById('resetModal').classList.add('flex');
+            };
+
+            window.closeReset = function(e) {
+                if (e && e.target !== e.currentTarget) return;
+                document.getElementById('resetModal').classList.add('hidden');
+                document.getElementById('resetModal').classList.remove('flex');
+            };
+
+            document.getElementById('reset-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const id = document.getElementById('reset-id').value;
+                const newPassword = document.getElementById('reset-password').value.trim() || null;
+
+                const btn = document.getElementById('reset-btn');
+                btn.disabled = true;
+                document.getElementById('reset-btn-text').classList.add('hidden');
+                document.getElementById('reset-spinner').classList.remove('hidden');
+
+                try {
+                    const result = await apiResetPassword(id, newPassword);
+                    if (result && result.temporary_password) {
+                        document.getElementById('reset-form').classList.add('hidden');
+                        document.getElementById('new-password-display').textContent = result.temporary_password;
+                        document.getElementById('reset-result').classList.remove('hidden');
+                    } else {
+                        App.showToast('Failed to reset password', 'error');
+                    }
+                } catch (err) {
+                    App.showToast(err.message || 'Failed to reset password', 'error');
+                } finally {
+                    btn.disabled = false;
+                    document.getElementById('reset-btn-text').classList.remove('hidden');
+                    document.getElementById('reset-spinner').classList.add('hidden');
+                }
+            });
+
+            // ── Init ────────────────────────────────────────
+            loadAccounts();
+        })();
+    </script>
+</body>
+</html>
