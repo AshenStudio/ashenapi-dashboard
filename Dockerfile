@@ -1,18 +1,15 @@
 # ── Ashen Studio Dashboard — Dockerfile ──────────────────
-# Serves static HTML/JS/CSS via nginx, proxies /api/ to backend.
+# Serves static HTML/JS/CSS via Python's built-in HTTP server.
+# For local dev / testing only.
+# Your nginx admin will configure a proper reverse proxy in production.
 
-FROM nginx:1.27-alpine
+FROM python:3-slim
 
-# Remove default nginx config
-RUN rm /etc/nginx/conf.d/default.conf
+WORKDIR /app
 
-# Copy custom nginx config
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-# Copy static dashboard files
-COPY index.html login.html releases.html accounts.html migrations.html /usr/share/nginx/html/
-COPY config.js api.js app.js /usr/share/nginx/html/
+# Copy all static files
+COPY . .
 
 EXPOSE 80
 
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["python", "-m", "http.server", "80", "--bind", "0.0.0.0"]
