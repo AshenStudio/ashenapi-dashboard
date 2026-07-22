@@ -307,10 +307,10 @@
 
                     const text = body.textContent || '';
 
-                    // pgAdmin itself renders a full UI — if the page is a
-                    // plain 401 error from the proxy, it'll have these markers
-                    if (text.includes('Unauthorized') &&
-                        (text.includes('Admin authentication') || text.includes('/pgadmin/auth'))) {
+                    // The proxy's 401 page contains the exact phrase
+                    // "Admin authentication required" — this is unique
+                    // enough to avoid false positives with pgAdmin's own UI
+                    if (text.includes('Admin authentication required')) {
 
                         console.warn('pgAdmin iframe shows 401 — session expired, re-authenticating…');
                         handleAuthFailure();
@@ -349,6 +349,10 @@
                     // it's not a 401 page
                     setTimeout(() => checkIframeForAuthFailure(), 500);
                 }
+            });
+
+            iframe.addEventListener('error', () => {
+                showError();
             });
 
             // ── Error display ──────────────────────────────
