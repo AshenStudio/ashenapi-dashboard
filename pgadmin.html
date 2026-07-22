@@ -175,7 +175,7 @@
             directUrlEl.textContent = pgAdminUrl;
 
             // Set the standalone link
-            standaloneLink.href = pgAdminUrl + '/login?next=/';
+            standaloneLink.href = pgAdminUrl;
 
             // ── Load pgAdmin in iframe ─────────────────────
             function loadPgAdmin() {
@@ -185,8 +185,8 @@
                 statusBadge.className = 'status-badge connecting';
                 statusBadge.textContent = '⟳ Connecting';
 
-                // Load the URL
-                iframe.src = pgAdminUrl + '/login?next=/';
+                // Load the URL (desktop mode has no login screen)
+                iframe.src = pgAdminUrl;
 
                 // After a delay, check if it loaded
                 setTimeout(checkConnection, 5000);
