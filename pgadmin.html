@@ -173,23 +173,57 @@
             // Determine pgAdmin URL (relative — proxied through the API at /pgadmin/)
             const pgAdminUrl = cfg.pgAdminUrl || '/pgadmin/';
             directUrlEl.textContent = window.location.origin + pgAdminUrl;
-
-            // Set the standalone link
             standaloneLink.href = pgAdminUrl;
 
-            // ── Load pgAdmin in iframe ─────────────────────
-            function loadPgAdmin() {
+            // ── Authenticate & load pgAdmin ────────────────
+            async function loadPgAdmin() {
                 skeleton.classList.remove('hidden');
                 iframe.classList.add('loading');
                 iframe.classList.remove('loaded');
                 statusBadge.className = 'status-badge connecting';
-                statusBadge.textContent = '⟳ Connecting';
+                statusBadge.textContent = '⟳ Authenticating…';
 
-                // Load the URL (desktop mode has no login screen)
-                iframe.src = pgAdminUrl;
+                try {
+                    // First, authenticate to get a session cookie
+                    const token = getToken();
+                    if (!token) {
+                        throw new Error('No auth token found. Please log in.');
+                    }
 
-                // After a delay, check if it loaded
-                setTimeout(checkConnection, 5000);
+                    const res = await fetch(cfg.apiUrl + '/pgadmin/auth', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': 'Bearer ' + token,
+                            'Accept': 'application/json',
+                        },
+                        credentials: 'include',
+                    });
+
+                    if (!res.ok) {
+                        const body = await res.json().catch(() => ({}));
+                        throw new Error(body.detail || 'Authentication failed (HTTP ' + res.status + ')');
+                    }
+
+                    // Cookie is now set — load pgAdmin in iframe
+                    statusBadge.textContent = '⟳ Connecting';
+                    iframe.src = pgAdminUrl;
+
+                    // After a delay, check if it loaded
+                    setTimeout(checkConnection, 5000);
+                } catch (err) {
+                    console.error('pgAdmin auth failed:', err);
+                    skeleton.classList.add('hidden');
+                    iframe.classList.add('hidden');
+                    statusBadge.className = 'status-badge error';
+                    statusBadge.textContent = '✗ Auth Failed';
+                    errorDiv.classList.remove('hidden');
+                    // Update error message
+                    const msgEl = errorDiv.querySelector('p');
+                    if (msgEl) {
+                        msgEl.innerHTML = 'Could not authenticate for pgAdmin access: <strong class="text-red-400">' +
+                            App.escapeHtml(err.message || 'Unknown error') + '</strong>';
+                    }
+                }
             }
 
             // ── Connection check ───────────────────────────
