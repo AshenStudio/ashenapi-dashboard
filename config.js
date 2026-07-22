@@ -11,8 +11,9 @@ window.ASHEN_CONFIG = {
     // Page size defaults
     defaultPageSize: 20,
 
-    // Auth token key in localStorage
+    // Auth token keys in localStorage
     tokenKey: 'ashen_auth_token',
+    refreshTokenKey: 'ashen_refresh_token',
 
     // pgAdmin database editor URL (relative — proxied through the API)
     pgAdminUrl: '/pgadmin/',

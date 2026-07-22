@@ -18,6 +18,7 @@ function isAuthenticated() {
 
 function logout() {
     localStorage.removeItem(CFG().tokenKey);
+    localStorage.removeItem(CFG().refreshTokenKey || 'ashen_refresh_token');
     window.location.href = 'login.html';
 }
 
@@ -68,8 +69,34 @@ async function apiLogin(username, password) {
     });
     if (data) {
         localStorage.setItem(CFG().tokenKey, data.access_token);
+        if (data.refresh_token) {
+            localStorage.setItem(CFG().refreshTokenKey || 'ashen_refresh_token', data.refresh_token);
+        }
     }
     return data;
+}
+
+async function apiRefreshToken() {
+    const refreshToken = localStorage.getItem(CFG().refreshTokenKey || 'ashen_refresh_token');
+    if (!refreshToken) return null;
+
+    try {
+        const data = await apiFetch('/api/auth/refresh', {
+            method: 'POST',
+            body: { refresh_token: refreshToken },
+        });
+        if (data) {
+            localStorage.setItem(CFG().tokenKey, data.access_token);
+            if (data.refresh_token) {
+                localStorage.setItem(CFG().refreshTokenKey || 'ashen_refresh_token', data.refresh_token);
+            }
+        }
+        return data;
+    } catch (err) {
+        // Refresh token expired or invalid — clear everything
+        logout();
+        return null;
+    }
 }
 
 // ── Accounts ──────────────────────────────────────────────

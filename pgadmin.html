@@ -178,6 +178,12 @@
             let refreshInterval = null;
 
             async function refreshPgAdminSession() {
+                // Step 1: Refresh the Bearer token first (keeps it alive
+                // indefinitely as long as the refresh token is valid)
+                const freshTokens = await apiRefreshToken();
+                if (!freshTokens) return false; // refresh token expired
+
+                // Step 2: Use the fresh Bearer token to get a pgAdmin cookie
                 const token = getToken();
                 if (!token) return false;
                 try {
@@ -196,20 +202,18 @@
             }
 
             function startSessionRefresh() {
-                // Refresh the cookie every 25 minutes (cookie lasts 1 hour).
-                // The Bearer token itself expires after 60 min — if it's gone
-                // stale, the refresh will fail silently and the reactive
-                // 401 handler will catch the failure later.
+                // Refresh the Bearer token AND pgAdmin cookie every 25 minutes.
+                // Bearer token: gets a fresh 60-min expiry every 25 min.
+                // pgAdmin cookie: gets a fresh 1-hour expiry every 25 min.
+                // Both stay alive indefinitely (refresh token lasts 7 days).
                 if (refreshInterval) clearInterval(refreshInterval);
                 refreshInterval = setInterval(async () => {
                     const ok = await refreshPgAdminSession();
                     if (!ok) {
-                        // Token might have expired — try a second time
-                        // in case it was a transient network issue
                         setTimeout(async () => {
                             const retry = await refreshPgAdminSession();
                             if (!retry) {
-                                console.warn('pgAdmin session refresh failed — token may have expired');
+                                console.warn('Token refresh cycle failed — logging out.');
                             }
                         }, 2000);
                     }
@@ -328,15 +332,15 @@
                 statusBadge.className = 'status-badge connecting';
                 statusBadge.textContent = '⟳ Session expired — renewing…';
 
-                // Try to refresh the session silently
+                // Try to refresh the session — this will also refresh
+                // the Bearer token if needed
                 const ok = await refreshPgAdminSession();
                 if (ok) {
-                    // Cookie renewed — reload iframe
                     App.showToast('Session renewed', 'success');
                     iframe.src = pgAdminUrl;
                     setTimeout(checkConnection, 5000);
+                    startSessionRefresh();
                 } else {
-                    // Token itself has expired — redirect to login
                     App.showToast('Your session has expired. Please log in again.', 'error');
                     setTimeout(() => { window.location.href = 'login.html'; }, 2000);
                 }
