@@ -14,6 +14,9 @@ window.ASHEN_CONFIG = {
     // Auth token key in localStorage
     tokenKey: 'ashen_auth_token',
 
+    // pgAdmin database editor URL
+    pgAdminUrl: 'http://localhost:5050',
+
     // Release info
     launcherFileName: 'AshenLauncher.exe',
     modpackFileName: 'modpack.zip',

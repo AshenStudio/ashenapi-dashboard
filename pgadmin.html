@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Database · Ashen Studio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="config.js"></script>
+    <script src="api.js"></script>
+    <script src="app.js"></script>
+    <style>
+        body { background: #0f0f1a; }
+        .card-subtle { background: rgba(31, 41, 55, 0.6); border: 1px solid rgba(75, 85, 99, 0.3); }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.4s ease-out; }
+
+        .pgadmin-iframe {
+            width: 100%;
+            height: calc(100vh - 140px);
+            min-height: 600px;
+            border: none;
+            border-radius: 0.75rem;
+            background: #fff;
+            transition: opacity 0.3s ease;
+        }
+        .pgadmin-iframe.loading { opacity: 0; }
+        .pgadmin-iframe.loaded { opacity: 1; }
+
+        /* Loading skeleton */
+        .skeleton {
+            background: linear-gradient(90deg, rgba(31,41,55,0.6) 25%, rgba(55,65,81,0.6) 50%, rgba(31,41,55,0.6) 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+            border-radius: 0.75rem;
+        }
+        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 2px 10px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        .status-badge.connected { background: rgba(52, 211, 153, 0.15); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.3); }
+        .status-badge.connecting { background: rgba(251, 191, 36, 0.15); color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.3); }
+        .status-badge.error { background: rgba(248, 113, 113, 0.15); color: #f87171; border: 1px solid rgba(248, 113, 113, 0.3); }
+    </style>
+</head>
+<body class="min-h-screen text-gray-100">
+
+    <!-- Navigation -->
+    <nav class="bg-gray-900/90 backdrop-blur-sm border-b border-gray-800 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center space-x-8">
+                    <a href="index.html" class="flex items-center space-x-2 text-white font-bold text-lg">
+                        <span class="inline-flex items-center justify-center w-8 h-8 bg-indigo-600 rounded-lg">
+                            <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                            </svg>
+                        </span>
+                        <span>Ashen</span>
+                    </a>
+                    <div class="hidden md:flex space-x-1">
+                        <a href="index.html" class="nav-link px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-all">Dashboard</a>
+                        <a href="releases.html" class="nav-link px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-all">Releases</a>
+                        <a href="accounts.html" class="nav-link px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-all">Accounts</a>
+                        <a href="migrations.html" class="nav-link px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-all">Migrations</a>
+                        <a href="pgadmin.html" class="nav-link px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-all">Database</a>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <span class="text-sm text-gray-400 hidden sm:block" id="username-display"></span>
+                    <button onclick="logout()" class="js-auth-show px-3 py-1.5 text-sm text-gray-400 hover:text-red-400 hover:bg-red-900/30 rounded-lg transition-all">Logout</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Toast -->
+    <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+    <main class="animate-fade-in">
+        <!-- Header bar -->
+        <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <div>
+                        <h1 class="text-2xl font-bold text-white">PostgreSQL — pgAdmin 4</h1>
+                        <p class="text-gray-400 text-sm mt-0.5">Full-featured database management, embedded in the dashboard.</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <span id="connection-status" class="status-badge connecting">⟳ Connecting</span>
+                    <a id="open-standalone" href="#" target="_blank"
+                       class="text-xs text-gray-400 hover:text-indigo-400 transition-colors flex items-center space-x-1"
+                       title="Open in new tab">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                        </svg>
+                        <span>Open standalone</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- pgAdmin iframe -->
+        <div class="px-4 sm:px-6 lg:px-8 pb-6">
+            <!-- Loading skeleton shown while iframe loads -->
+            <div id="loading-skeleton" class="skeleton w-full" style="height: calc(100vh - 190px); min-height: 600px;"></div>
+
+            <iframe id="pgadmin-frame"
+                    class="pgadmin-iframe loading"
+                    src="about:blank"
+                    sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
+                    allow="clipboard-read; clipboard-write"
+                    title="pgAdmin 4"></iframe>
+
+            <!-- Connection error fallback -->
+            <div id="connection-error" class="hidden card-subtle rounded-xl p-8 text-center">
+                <svg class="w-16 h-16 text-red-500/50 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                </svg>
+                <h2 class="text-xl font-semibold text-white mb-2">Could not connect to pgAdmin</h2>
+                <p class="text-gray-400 max-w-md mx-auto mb-6">
+                    The pgAdmin service doesn't appear to be running. Make sure the API stack is
+                    deployed with the pgAdmin container.
+                </p>
+                <div class="inline-block text-left bg-gray-800/50 rounded-lg p-4 mb-6 text-sm">
+                    <p class="text-gray-400 font-medium mb-2">Checklist:</p>
+                    <ul class="space-y-1.5 text-gray-500">
+                        <li class="flex items-start space-x-2">
+                            <span class="text-emerald-400 mt-0.5">✓</span>
+                            <span>pgAdmin container is running in Portainer</span>
+                        </li>
+                        <li class="flex items-start space-x-2">
+                            <span class="text-emerald-400 mt-0.5">✓</span>
+                            <span>Port <code class="text-gray-300 text-xs">5050</code> is accessible from the dashboard's origin</span>
+                        </li>
+                        <li class="flex items-start space-x-2">
+                            <span class="text-emerald-400 mt-0.5">✓</span>
+                            <span>Your nginx proxies <code class="text-gray-300 text-xs">/pgadmin/</code> to <code class="text-gray-300 text-xs">http://ashenapi-pgadmin:80</code></span>
+                        </li>
+                        <li class="flex items-start space-x-2">
+                            <span class="text-gray-600 mt-0.5">○</span>
+                            <span>Or access pgAdmin directly at <code id="direct-url" class="text-gray-300 text-xs"></code></span>
+                        </li>
+                    </ul>
+                </div>
+                <button onclick="retryConnection()" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-lg transition-all">
+                    Retry Connection
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        (function() {
+            'use strict';
+
+            if (!App.requireAuth()) return;
+
+            const cfg = CFG();
+            const iframe = document.getElementById('pgadmin-frame');
+            const skeleton = document.getElementById('loading-skeleton');
+            const statusBadge = document.getElementById('connection-status');
+            const errorDiv = document.getElementById('connection-error');
+            const directUrlEl = document.getElementById('direct-url');
+            const standaloneLink = document.getElementById('open-standalone');
+
+            // Determine pgAdmin URL
+            const pgAdminUrl = cfg.pgAdminUrl || 'http://localhost:5050';
+            directUrlEl.textContent = pgAdminUrl;
+
+            // Set the standalone link
+            standaloneLink.href = pgAdminUrl + '/login?next=/';
+
+            // ── Load pgAdmin in iframe ─────────────────────
+            function loadPgAdmin() {
+                skeleton.classList.remove('hidden');
+                iframe.classList.add('loading');
+                iframe.classList.remove('loaded');
+                statusBadge.className = 'status-badge connecting';
+                statusBadge.textContent = '⟳ Connecting';
+
+                // Load the URL
+                iframe.src = pgAdminUrl + '/login?next=/';
+
+                // After a delay, check if it loaded
+                setTimeout(checkConnection, 5000);
+            }
+
+            // ── Connection check ───────────────────────────
+            let connectionChecked = false;
+
+            function checkConnection() {
+                if (connectionChecked) return;
+                try {
+                    // Try to access iframe content — throws if cross-origin
+                    // (cross-origin means it's loading, which is success)
+                    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+                    if (doc) {
+                        // Same-origin — pgAdmin loaded
+                        onConnected();
+                    }
+                } catch (e) {
+                    // Cross-origin — this is expected and means the page loaded
+                    onConnected();
+                }
+            }
+
+            function onConnected() {
+                if (connectionChecked) return;
+                connectionChecked = true;
+                skeleton.classList.add('hidden');
+                iframe.classList.remove('loading');
+                iframe.classList.add('loaded');
+                statusBadge.className = 'status-badge connected';
+                statusBadge.textContent = '✓ Connected';
+                errorDiv.classList.add('hidden');
+            }
+
+            // ── Handle errors ──────────────────────────────
+            let loadTimer = null;
+
+            iframe.addEventListener('load', () => {
+                clearTimeout(loadTimer);
+                // Small delay to ensure page is rendered
+                loadTimer = setTimeout(checkConnection, 1000);
+            });
+
+            iframe.addEventListener('error', () => {
+                showError();
+            });
+
+            function showError() {
+                if (connectionChecked) return;
+                skeleton.classList.add('hidden');
+                iframe.classList.add('hidden');
+                statusBadge.className = 'status-badge error';
+                statusBadge.textContent = '✗ Unreachable';
+                errorDiv.classList.remove('hidden');
+            }
+
+            // ── Retry ──────────────────────────────────────
+            window.retryConnection = function() {
+                connectionChecked = false;
+                iframe.classList.remove('hidden');
+                errorDiv.classList.add('hidden');
+                statusBadge.className = 'status-badge connecting';
+                statusBadge.textContent = '⟳ Connecting';
+                loadPgAdmin();
+            };
+
+            // ── Init ───────────────────────────────────────
+            // Start loading after a brief render delay
+            setTimeout(loadPgAdmin, 100);
+
+        })();
+    </script>
+</body>
+</html>
