@@ -137,15 +137,15 @@
                         </li>
                         <li class="flex items-start space-x-2">
                             <span class="text-emerald-400 mt-0.5">✓</span>
-                            <span>Port <code class="text-gray-300 text-xs">5050</code> is accessible from the dashboard's origin</span>
+                            <span>The API container can reach <code class="text-gray-300 text-xs">ashenapi-pgadmin:80</code></span>
                         </li>
                         <li class="flex items-start space-x-2">
                             <span class="text-emerald-400 mt-0.5">✓</span>
-                            <span>Your nginx proxies <code class="text-gray-300 text-xs">/pgadmin/</code> to <code class="text-gray-300 text-xs">http://ashenapi-pgadmin:80</code></span>
+                            <span>FastAPI proxy route <code class="text-gray-300 text-xs">/pgadmin/</code> is registered</span>
                         </li>
                         <li class="flex items-start space-x-2">
                             <span class="text-gray-600 mt-0.5">○</span>
-                            <span>Or access pgAdmin directly at <code id="direct-url" class="text-gray-300 text-xs"></code></span>
+                            <span>Try accessing <code id="direct-url" class="text-gray-300 text-xs"></code></span>
                         </li>
                     </ul>
                 </div>
@@ -170,9 +170,9 @@
             const directUrlEl = document.getElementById('direct-url');
             const standaloneLink = document.getElementById('open-standalone');
 
-            // Determine pgAdmin URL
-            const pgAdminUrl = cfg.pgAdminUrl || 'http://localhost:5050';
-            directUrlEl.textContent = pgAdminUrl;
+            // Determine pgAdmin URL (relative — proxied through the API at /pgadmin/)
+            const pgAdminUrl = cfg.pgAdminUrl || '/pgadmin/';
+            directUrlEl.textContent = window.location.origin + pgAdminUrl;
 
             // Set the standalone link
             standaloneLink.href = pgAdminUrl;
