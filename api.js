@@ -144,3 +144,12 @@ async function apiCreateRetryRequest(body) {
 async function apiListRetryRequests(page = 1, pageSize = 20) {
     return apiFetch(`/api/admin/migrations/retry-requests?page=${page}&pageSize=${pageSize}`);
 }
+
+// ── Database Query ─────────────────────────────────────────
+
+async function apiExecuteQuery(query, params = null) {
+    return apiFetch('/api/admin/db/query', {
+        method: 'POST',
+        body: { query, params },
+    });
+}

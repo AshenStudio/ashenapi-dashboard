@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Database · Ashen Studio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="config.js"></script>
+    <script src="api.js"></script>
+    <script src="app.js"></script>
+    <style>
+        body { background: #0f0f1a; }
+        .card-subtle { background: rgba(31, 41, 55, 0.6); border: 1px solid rgba(75, 85, 99, 0.3); }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.4s ease-out; }
+
+        /* SQL Editor */
+        .sql-editor {
+            font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            tab-size: 2;
+            resize: vertical;
+            background: #1a1a2e;
+            border: 1px solid rgba(99, 102, 241, 0.2);
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .sql-editor:focus {
+            border-color: rgba(99, 102, 241, 0.6);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+            outline: none;
+        }
+        .sql-editor::placeholder { color: #4a4a6a; }
+
+        /* Results table */
+        .results-scroll {
+            max-height: 54vh;
+            overflow: auto;
+        }
+        .results-scroll::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        .results-scroll::-webkit-scrollbar-track {
+            background: rgba(31, 41, 55, 0.3);
+        }
+        .results-scroll::-webkit-scrollbar-thumb {
+            background: rgba(75, 85, 99, 0.5);
+            border-radius: 4px;
+        }
+        .results-scroll::-webkit-scrollbar-thumb:hover {
+            background: rgba(75, 85, 99, 0.8);
+        }
+        .results-table { border-collapse: separate; border-spacing: 0; width: 100%; }
+        .results-table th {
+            position: sticky; top: 0; z-index: 10;
+            background: #1e1e3a;
+            border-bottom: 2px solid rgba(99, 102, 241, 0.3);
+            padding: 10px 14px;
+            text-align: left;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #a5b4fc;
+            white-space: nowrap;
+        }
+        .results-table td {
+            padding: 8px 14px;
+            border-bottom: 1px solid rgba(75, 85, 99, 0.2);
+            font-size: 13px;
+            font-family: 'JetBrains Mono', 'Consolas', monospace;
+            color: #d1d5db;
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .results-table tr:hover td { background: rgba(99, 102, 241, 0.05); }
+        .results-table .cell-null { color: #6b7280; font-style: italic; }
+        .results-table .cell-number { color: #34d399; text-align: right; }
+        .results-table .cell-bool { color: #f472b6; text-align: center; }
+
+        /* Query history */
+        .history-item {
+            padding: 8px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            border-left: 3px solid transparent;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        .history-item:hover {
+            background: rgba(99, 102, 241, 0.1);
+            border-left-color: #6366f1;
+        }
+        .history-item code {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            font-size: 11px;
+            color: #9ca3af;
+        }
+        .history-item .time {
+            font-size: 10px;
+            color: #6b7280;
+            white-space: nowrap;
+        }
+
+        /* Status line */
+        .status-line {
+            font-family: 'JetBrains Mono', 'Consolas', monospace;
+            font-size: 12px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .spinner { animation: spin 0.8s linear infinite; }
+
+        /* Copy button on hover */
+        .copy-cell {
+            opacity: 0;
+            transition: opacity 0.15s ease;
+        }
+        tr:hover .copy-cell { opacity: 1; }
+    </style>
+</head>
+<body class="min-h-screen text-gray-100">
+
+    <!-- Navigation -->
+    <nav class="bg-gray-900/90 backdrop-blur-sm border-b border-gray-800 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center space-x-8">
+                    <a href="index.html" class="flex items-center space-x-2 text-white font-bold text-lg">
+                        <span class="inline-flex items-center justify-center w-8 h-8 bg-indigo-600 rounded-lg">
+                            <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                            </svg>
+                        </span>
+                        <span>Ashen</span>
+                    </a>
+                    <div class="hidden md:flex space-x-1">
+                        <a href="index.html" class="nav-link px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-all">Dashboard</a>
+                        <a href="releases.html" class="nav-link px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-all">Releases</a>
+                        <a href="accounts.html" class="nav-link px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-all">Accounts</a>
+                        <a href="migrations.html" class="nav-link px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-all">Migrations</a>
+                        <a href="db.html" class="nav-link px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-all">Database</a>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <span class="text-sm text-gray-400 hidden sm:block" id="username-display"></span>
+                    <button onclick="logout()" class="js-auth-show px-3 py-1.5 text-sm text-gray-400 hover:text-red-400 hover:bg-red-900/30 rounded-lg transition-all">Logout</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Toast -->
+    <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
+
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-6">
+            <div>
+                <h1 class="text-3xl font-bold text-white">Database</h1>
+                <p class="text-gray-400 mt-1">Execute read-only SQL queries against the PostgreSQL database.</p>
+            </div>
+            <div class="flex items-center space-x-2 text-xs text-gray-500">
+                <kbd class="px-1.5 py-0.5 bg-gray-800 rounded text-gray-400 border border-gray-700">Ctrl</kbd>
+                <span>+</span>
+                <kbd class="px-1.5 py-0.5 bg-gray-800 rounded text-gray-400 border border-gray-700">Enter</kbd>
+                <span class="ml-1">to execute</span>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <!-- Left: Query History -->
+            <div class="lg:col-span-1 order-2 lg:order-1">
+                <div class="card-subtle rounded-xl p-4 lg:sticky lg:top-24">
+                    <div class="flex items-center justify-between mb-3">
+                        <h2 class="text-sm font-semibold text-gray-300 uppercase tracking-wider">History</h2>
+                        <button id="clear-history" class="text-xs text-gray-500 hover:text-red-400 transition-colors" title="Clear history">Clear</button>
+                    </div>
+                    <div id="history-container" class="space-y-1 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                        <p class="text-gray-600 text-xs py-4 text-center">No queries yet.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Editor + Results -->
+            <div class="lg:col-span-3 order-1 lg:order-2 space-y-4">
+
+                <!-- SQL Editor Card -->
+                <div class="card-subtle rounded-xl overflow-hidden">
+                    <div class="flex items-center justify-between px-5 py-3 bg-gray-800/30 border-b border-gray-700/50">
+                        <div class="flex items-center space-x-3">
+                            <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/>
+                            </svg>
+                            <span class="text-sm font-medium text-gray-300">SQL Query</span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <span id="char-count" class="text-xs text-gray-500">0 chars</span>
+                        </div>
+                    </div>
+                    <div class="p-1">
+                        <textarea id="sql-input" class="sql-editor w-full p-4 rounded-lg text-gray-200 placeholder-gray-600"
+                                  rows="7" spellcheck="false" autofocus
+                                  placeholder="SELECT * FROM accounts LIMIT 10;">SELECT
+    table_name,
+    table_schema,
+    table_type
+FROM information_schema.tables
+WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
+ORDER BY table_name;</textarea>
+                    </div>
+                    <div class="flex items-center justify-between px-5 py-3 bg-gray-800/30 border-t border-gray-700/50">
+                        <div class="flex items-center space-x-3">
+                            <button id="btn-execute" class="inline-flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                                <span id="btn-text">Execute</span>
+                            </button>
+                            <button id="btn-format" class="px-3 py-2 text-xs text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-all" title="Format SQL (basic)">
+                                Format
+                            </button>
+                        </div>
+                        <div id="status-line" class="status-line text-gray-500"></div>
+                    </div>
+                </div>
+
+                <!-- Results Card -->
+                <div class="card-subtle rounded-xl overflow-hidden">
+                    <div class="flex items-center justify-between px-5 py-3 bg-gray-800/30 border-b border-gray-700/50">
+                        <div class="flex items-center space-x-3">
+                            <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                            <span class="text-sm font-medium text-gray-300">Results</span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <button id="btn-copy-results" class="text-xs text-gray-500 hover:text-white transition-colors px-2 py-1 rounded hover:bg-gray-700" title="Copy results as TSV">
+                                Copy
+                            </button>
+                            <button id="btn-export-csv" class="text-xs text-gray-500 hover:text-white transition-colors px-2 py-1 rounded hover:bg-gray-700" title="Export as CSV">
+                                CSV
+                            </button>
+                        </div>
+                    </div>
+                    <div id="results-container" class="results-scroll">
+                        <div class="flex flex-col items-center justify-center py-16 text-gray-500">
+                            <svg class="w-12 h-12 mb-3 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/>
+                            </svg>
+                            <p class="text-sm">Run a query to see results</p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <script>
+        (function() {
+            'use strict';
+
+            if (!App.requireAuth()) return;
+
+            const MAX_HISTORY = 50;
+            const STORAGE_KEY = 'ashen_db_history';
+
+            // ── State ──────────────────────────────────────
+            let currentResults = null; // { columns, rows, row_count, execution_time_ms }
+
+            // ── DOM refs ───────────────────────────────────
+            const sqlInput = document.getElementById('sql-input');
+            const btnExecute = document.getElementById('btn-execute');
+            const btnText = document.getElementById('btn-text');
+            const statusLine = document.getElementById('status-line');
+            const resultsContainer = document.getElementById('results-container');
+            const historyContainer = document.getElementById('history-container');
+            const charCount = document.getElementById('char-count');
+            const btnFormat = document.getElementById('btn-format');
+            const btnCopy = document.getElementById('btn-copy-results');
+            const btnExportCsv = document.getElementById('btn-export-csv');
+            const btnClearHistory = document.getElementById('clear-history');
+
+            // ── Char count ─────────────────────────────────
+            sqlInput.addEventListener('input', () => {
+                charCount.textContent = sqlInput.value.length + ' chars';
+            });
+            charCount.textContent = sqlInput.value.length + ' chars';
+
+            // ── Tab support in textarea ────────────────────
+            sqlInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Tab') {
+                    e.preventDefault();
+                    const start = sqlInput.selectionStart;
+                    const end = sqlInput.selectionEnd;
+                    sqlInput.value = sqlInput.value.substring(0, start) + '  ' + sqlInput.value.substring(end);
+                    sqlInput.selectionStart = sqlInput.selectionEnd = start + 2;
+                    charCount.textContent = sqlInput.value.length + ' chars';
+                }
+                // Ctrl+Enter / Cmd+Enter to execute
+                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                    e.preventDefault();
+                    executeQuery();
+                }
+            });
+
+            // ── Execute Query ──────────────────────────────
+            async function executeQuery() {
+                const query = sqlInput.value.trim();
+                if (!query) {
+                    App.showToast('Please enter a SQL query.', 'warning');
+                    return;
+                }
+
+                btnExecute.disabled = true;
+                btnText.textContent = 'Running…';
+                statusLine.innerHTML = '<span class="text-amber-400">⟳ Executing query…</span>';
+
+                // Show spinner in results
+                resultsContainer.innerHTML = `
+                    <div class="flex items-center justify-center py-16">
+                        <svg class="w-8 h-8 text-indigo-400 spinner" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                        </svg>
+                        <span class="ml-3 text-gray-400 text-sm">Running query…</span>
+                    </div>
+                `;
+
+                try {
+                    const result = await apiExecuteQuery(query);
+                    if (!result) throw new Error('No response from server.');
+
+                    currentResults = result;
+                    renderResults(result);
+                    saveToHistory(query, result);
+                    renderHistory();
+
+                    const elapsed = result.execution_time_ms < 1000
+                        ? result.execution_time_ms + 'ms'
+                        : (result.execution_time_ms / 1000).toFixed(2) + 's';
+
+                    if (result.columns && result.columns.length > 0) {
+                        statusLine.innerHTML = `<span class="text-emerald-400">✓</span> <span class="text-gray-400">${result.row_count} rows in ${elapsed}</span>`;
+                    } else {
+                        statusLine.innerHTML = `<span class="text-emerald-400">✓</span> <span class="text-gray-400">Query OK — ${result.affected_rows} rows affected in ${elapsed}</span>`;
+                    }
+                } catch (err) {
+                    currentResults = null;
+                    resultsContainer.innerHTML = `
+                        <div class="flex items-start p-6 space-x-3">
+                            <svg class="w-5 h-5 text-red-400 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+                            </svg>
+                            <div>
+                                <p class="text-red-400 text-sm font-medium">Query Error</p>
+                                <p class="text-red-300/80 text-xs mt-1 font-mono">${App.escapeHtml(err.message || 'Unknown error')}</p>
+                            </div>
+                        </div>
+                    `;
+                    statusLine.innerHTML = `<span class="text-red-400">✗</span> <span class="text-gray-400">Error — ${App.escapeHtml(err.message || 'Unknown')}</span>`;
+                } finally {
+                    btnExecute.disabled = false;
+                    btnText.textContent = 'Execute';
+                }
+            }
+
+            // ── Render Results ─────────────────────────────
+            function renderResults(result) {
+                if (!result.columns || result.columns.length === 0) {
+                    resultsContainer.innerHTML = `
+                        <div class="flex items-center justify-center py-12 text-gray-500">
+                            <p class="text-sm">Query executed successfully — no result set.</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                const { columns, rows } = result;
+                let html = '<table class="results-table"><thead><tr>';
+
+                // Column headers with index
+                columns.forEach((col, i) => {
+                    html += `<th>${App.escapeHtml(col)}</th>`;
+                });
+                html += '<th class="w-0"></th></tr></thead><tbody>';
+
+                // Rows
+                rows.forEach((row, ri) => {
+                    html += '<tr>';
+                    row.forEach((cell, ci) => {
+                        let cls = '';
+                        let val = 'NULL';
+                        if (cell === null || cell === undefined) {
+                            cls = 'cell-null';
+                            val = 'NULL';
+                        } else if (typeof cell === 'number' || (!isNaN(cell) && cell !== '' && columns[ci] && (columns[ci].toLowerCase().includes('count') || columns[ci].toLowerCase().includes('id')))) {
+                            // Try to detect numbers
+                            cls = 'cell-number';
+                            val = String(cell);
+                        } else {
+                            val = String(cell);
+                        }
+                        html += `<td class="${cls}" title="${App.escapeHtml(val)}">${App.escapeHtml(val)}</td>`;
+                    });
+                    // Copy button
+                    html += `<td class="copy-cell w-0 p-2 text-center"><button onclick="copyRow(${ri})" class="text-xs text-gray-600 hover:text-white transition-colors" title="Copy row">⧉</button></td>`;
+                    html += '</tr>';
+                });
+
+                html += '</tbody></table>';
+                resultsContainer.innerHTML = html;
+            }
+
+            // ── Copy row ───────────────────────────────────
+            window.copyRow = function(rowIndex) {
+                if (!currentResults || !currentResults.rows || !currentResults.rows[rowIndex]) return;
+                const row = currentResults.rows[rowIndex];
+                const cols = currentResults.columns;
+                const tsv = row.map((cell, i) => `${cols[i]}: ${cell ?? 'NULL'}`).join('\t');
+                navigator.clipboard.writeText(tsv).then(() => {
+                    App.showToast('Row copied to clipboard', 'success');
+                }).catch(() => {});
+            };
+
+            // ── Copy all results ───────────────────────────
+            btnCopy.addEventListener('click', () => {
+                if (!currentResults || !currentResults.columns) {
+                    App.showToast('No results to copy.', 'warning');
+                    return;
+                }
+                const { columns, rows } = currentResults;
+                const tsv = [columns.join('\t'), ...rows.map(r => r.map(c => c ?? '').join('\t'))].join('\n');
+                navigator.clipboard.writeText(tsv).then(() => {
+                    App.showToast('Results copied as TSV', 'success');
+                }).catch(() => {});
+            });
+
+            // ── Export CSV ─────────────────────────────────
+            btnExportCsv.addEventListener('click', () => {
+                if (!currentResults || !currentResults.columns) {
+                    App.showToast('No results to export.', 'warning');
+                    return;
+                }
+                const { columns, rows } = currentResults;
+                const escapeCsv = (v) => {
+                    const s = v ?? '';
+                    return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+                };
+                const csv = [columns.map(escapeCsv).join(','), ...rows.map(r => r.map(escapeCsv).join(','))].join('\n');
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'ashen_query_results.csv';
+                a.click();
+                URL.revokeObjectURL(url);
+                App.showToast('CSV downloaded', 'success');
+            });
+
+            // ── History ────────────────────────────────────
+            function loadHistory() {
+                try {
+                    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+                } catch { return []; }
+            }
+
+            function saveToHistory(query, result) {
+                let history = loadHistory();
+                history.unshift({
+                    query: query,
+                    columns: result.columns || [],
+                    row_count: result.row_count || 0,
+                    execution_time_ms: result.execution_time_ms || 0,
+                    timestamp: new Date().toISOString(),
+                });
+                if (history.length > MAX_HISTORY) history = history.slice(0, MAX_HISTORY);
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+            }
+
+            function renderHistory() {
+                const history = loadHistory();
+                if (!history.length) {
+                    historyContainer.innerHTML = '<p class="text-gray-600 text-xs py-4 text-center">No queries yet.</p>';
+                    return;
+                }
+                let html = '';
+                history.forEach((item, i) => {
+                    const preview = item.query.length > 80 ? item.query.slice(0, 80) + '…' : item.query;
+                    const time = new Date(item.timestamp);
+                    const timeStr = time.toLocaleString('en-GB', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    const elapsed = item.execution_time_ms < 1000
+                        ? item.execution_time_ms + 'ms'
+                        : (item.execution_time_ms / 1000).toFixed(2) + 's';
+                    html += `
+                        <div class="history-item" onclick="restoreQuery(${i})">
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="text-${item.columns.length ? 'emerald' : 'gray'}-400 text-xs font-medium">${item.row_count} rows · ${elapsed}</span>
+                                <span class="time">${timeStr}</span>
+                            </div>
+                            <code class="text-gray-500">${App.escapeHtml(preview)}</code>
+                        </div>
+                    `;
+                });
+                historyContainer.innerHTML = html;
+            }
+
+            window.restoreQuery = function(index) {
+                const history = loadHistory();
+                if (!history[index]) return;
+                sqlInput.value = history[index].query;
+                charCount.textContent = sqlInput.value.length + ' chars';
+                sqlInput.focus();
+                sqlInput.scrollTop = 0;
+            };
+
+            // ── Clear history ──
+            btnClearHistory.addEventListener('click', () => {
+                if (!confirm('Clear all query history?')) return;
+                localStorage.removeItem(STORAGE_KEY);
+                renderHistory();
+                App.showToast('History cleared', 'info');
+            });
+
+            // ── Format SQL (basic uppercase) ───────────────
+            btnFormat.addEventListener('click', () => {
+                const q = sqlInput.value;
+                // Simple keyword uppercasing
+                const keywords = /\b(select|from|where|and|or|not|in|like|between|is|null|as|on|join|left|right|inner|outer|cross|full|using|order|by|group|having|limit|offset|insert|into|values|update|set|delete|create|table|alter|add|drop|index|view|distinct|count|sum|avg|min|max|case|when|then|else|end|exists|union|all|except|intersect|returning)\b/gi;
+                const formatted = q.replace(keywords, (match) => match.toUpperCase());
+                sqlInput.value = formatted;
+                charCount.textContent = sqlInput.value.length + ' chars';
+            });
+
+            // ── Execute button ─────────────────────────────
+            btnExecute.addEventListener('click', executeQuery);
+
+            // ── Init ───────────────────────────────────────
+            renderHistory();
+        })();
+    </script>
+</body>
+</html>
