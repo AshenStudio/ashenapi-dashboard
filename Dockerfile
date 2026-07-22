@@ -10,6 +10,7 @@
 ARG CACHEBUST=1
 
 FROM python:3-slim
+ARG CACHEBUST
 
 WORKDIR /app
 
