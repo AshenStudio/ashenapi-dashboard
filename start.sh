@@ -14,7 +14,7 @@ CONFIG_FILE="/app/config.js"
 
 if [ -n "$API_URL" ]; then
     echo "[*] API_URL detected — setting apiUrl to $API_URL"
-    cat > "$CONFIG_FILE" <<- EOF
+    cat > "$CONFIG_FILE" <<EOF
 window.ASHEN_CONFIG = {
     configBuiltAt: '$(date -u +%Y-%m-%dT%H:%M:%SZ)',
     apiUrl: '$API_URL',
