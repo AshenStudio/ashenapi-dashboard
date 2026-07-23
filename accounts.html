@@ -120,44 +120,6 @@
             let totalCount = 0;
             let accounts = [];
 
-            // ── Toggle Admin ─────────────────────────────
-            function getCurrentAccountId() {
-                try {
-                    const token = localStorage.getItem(CFG().tokenKey);
-                    if (!token) return null;
-                    const payload = JSON.parse(atob(token.split('.')[1]));
-                    return payload.sub || null;
-                } catch { return null; }
-            }
-
-            window.toggleAdmin = async function(id, username, makeAdmin) {
-                const action = makeAdmin ? 'grant admin to' : 'revoke admin from';
-
-                // Warn if revoking your own admin access
-                const currentId = getCurrentAccountId();
-                let msg = `Are you sure you want to ${action} \"${username}\"?`;
-                if (!makeAdmin && currentId === id) {
-                    msg = '⚠️ WARNING: You are about to revoke YOUR OWN admin access!\n\n' +
-                          'You will lose all admin privileges immediately, including the ability to restore them via this dashboard.\n\n' +
-                          'Are you absolutely sure?';
-                }
-
-                if (!confirm(msg)) return;
-                try {
-                    await apiSetAdmin(id, makeAdmin);
-                    App.showToast(`Admin ${makeAdmin ? 'granted' : 'revoked'} for \"${username}\"`, 'success');
-
-                    // If user revoked themselves, redirect to dashboard after a moment
-                    if (!makeAdmin && currentId === id) {
-                        setTimeout(() => { window.location.href = 'index.html'; }, 1500);
-                    } else {
-                        loadAccounts();
-                    }
-                } catch (err) {
-                    App.showToast(err.message || `Failed to ${makeAdmin ? 'grant' : 'revoke'} admin`, 'error');
-                }
-            };
-
             async function loadAccounts() {
                 try {
                     const data = await apiListAccounts(currentPage, pageSize);
@@ -212,11 +174,6 @@
                             <td class="py-3 pr-4 text-gray-400">${a.identity_count ?? 0}</td>
                             <td class="py-3 pr-4">
                                 <div class="flex items-center space-x-3">
-                                    <button onclick="toggleAdmin('${a.id}', '${App.escapeHtml(a.username)}', ${!isAdmin})"
-                                            class="${isAdmin ? 'text-amber-400 hover:text-amber-300' : 'text-emerald-400 hover:text-emerald-300'} transition-colors text-xs font-medium uppercase tracking-wider">
-                                        ${isAdmin ? 'Revoke Admin' : 'Grant Admin'}
-                                    </button>
-                                    <span class="text-gray-600">·</span>
                                     <button onclick="openReset('${a.id}', '${App.escapeHtml(a.username)}')"
                                             class="text-indigo-400 hover:text-indigo-300 transition-colors text-sm font-medium">Reset password</button>
                                     <span class="text-gray-600">·</span>

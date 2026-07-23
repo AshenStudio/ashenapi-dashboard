@@ -183,14 +183,17 @@ async function apiListRetryRequests(page = 1, pageSize = 20) {
     return apiFetch(`/api/admin/migrations/retry-requests?page=${page}&pageSize=${pageSize}`);
 }
 
-// ── Database Query ─────────────────────────────────────────
+// ── Bootstrap ─────────────────────────────────────────────
 
-async function apiSetAdmin(accountId, isAdmin) {
-    return apiFetch(`/api/admin/accounts/${accountId}/set-admin`, {
-        method: 'PATCH',
-        body: { is_admin: isAdmin },
+async function apiBootstrapAdmin(username, serverKey) {
+    return apiFetch('/api/admin/bootstrap', {
+        method: 'POST',
+        body: { username },
+        headers: { 'X-Ashen-Server-Key': serverKey },
     });
 }
+
+// ── Database Query ─────────────────────────────────────────
 
 async function apiExecuteQuery(query, params = null) {
     return apiFetch('/api/admin/db/query', {

@@ -76,6 +76,49 @@
                     </svg>
                 </button>
             </form>
+
+            <!-- Bootstrap Admin -->
+            <div class="mt-6 pt-4 border-t border-gray-700/50">
+                <button id="bootstrap-toggle" class="w-full text-center text-sm text-gray-500 hover:text-gray-300 transition-colors">
+                    Need admin access?
+                </button>
+
+                <div id="bootstrap-panel" class="hidden mt-4 space-y-4">
+                    <p class="text-xs text-gray-500">
+                        Use the server key to grant admin privileges to an existing account.
+                        This is a one-shot bootstrap for initial setup.
+                    </p>
+                    <div>
+                        <label for="bootstrap-server-key" class="block text-sm font-medium text-gray-300 mb-1.5">Server Key</label>
+                        <input
+                            type="password"
+                            id="bootstrap-server-key"
+                            class="input-field w-full px-4 py-2.5 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors"
+                            placeholder="Enter X-Ashen-Server-Key"
+                        />
+                    </div>
+                    <div>
+                        <label for="bootstrap-username" class="block text-sm font-medium text-gray-300 mb-1.5">Username to promote</label>
+                        <input
+                            type="text"
+                            id="bootstrap-username"
+                            value="admin"
+                            class="input-field w-full px-4 py-2.5 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors"
+                        />
+                    </div>
+                    <div id="bootstrap-result" class="hidden px-4 py-3 rounded-lg text-sm"></div>
+                    <button
+                        id="bootstrap-btn"
+                        class="w-full py-2.5 px-4 bg-amber-600 hover:bg-amber-500 text-white font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-amber-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <span id="bootstrap-btn-text">Grant Admin</span>
+                        <svg id="bootstrap-spinner" class="hidden animate-spin h-5 w-5 mx-auto text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
         </div>
 
         <p class="text-center text-gray-500 text-xs mt-6">Ashen Studio © 2026</p>
@@ -133,6 +176,67 @@
             function showError(msg) {
                 errorEl.textContent = msg;
                 errorEl.classList.remove('hidden');
+            }
+
+            // ── Bootstrap Admin ──────────────────────────
+            const bootstrapToggle = document.getElementById('bootstrap-toggle');
+            const bootstrapPanel = document.getElementById('bootstrap-panel');
+            const bootstrapBtn = document.getElementById('bootstrap-btn');
+            const bootstrapBtnText = document.getElementById('bootstrap-btn-text');
+            const bootstrapSpinner = document.getElementById('bootstrap-spinner');
+            const bootstrapResult = document.getElementById('bootstrap-result');
+            const bootstrapServerKey = document.getElementById('bootstrap-server-key');
+            const bootstrapUsername = document.getElementById('bootstrap-username');
+
+            bootstrapToggle.addEventListener('click', (e) => {
+                e.preventDefault();
+                const isHidden = bootstrapPanel.classList.contains('hidden');
+                bootstrapPanel.classList.toggle('hidden');
+                bootstrapToggle.textContent = isHidden ? 'Hide admin bootstrap' : 'Need admin access?';
+            });
+
+            bootstrapBtn.addEventListener('click', async () => {
+                const serverKey = bootstrapServerKey.value.trim();
+                const username = bootstrapUsername.value.trim();
+
+                if (!serverKey) {
+                    showBootstrapResult('Please enter the server key.', 'error');
+                    return;
+                }
+                if (!username) {
+                    showBootstrapResult('Please enter a username.', 'error');
+                    return;
+                }
+
+                bootstrapBtn.disabled = true;
+                bootstrapBtnText.classList.add('hidden');
+                bootstrapSpinner.classList.remove('hidden');
+                bootstrapResult.classList.add('hidden');
+
+                try {
+                    const result = await apiBootstrapAdmin(username, serverKey);
+                    if (result && result.success) {
+                        showBootstrapResult(result.message || 'Admin granted! You can now sign in.', 'success');
+                    } else {
+                        showBootstrapResult(result?.message || 'Failed to grant admin.', 'error');
+                    }
+                } catch (err) {
+                    showBootstrapResult(err.message || 'Connection failed.', 'error');
+                } finally {
+                    bootstrapBtn.disabled = false;
+                    bootstrapBtnText.classList.remove('hidden');
+                    bootstrapSpinner.classList.add('hidden');
+                }
+            });
+
+            function showBootstrapResult(msg, type) {
+                const colors = {
+                    success: 'bg-emerald-900/50 border border-emerald-700/50 text-emerald-300',
+                    error: 'bg-red-900/50 border border-red-700/50 text-red-300',
+                };
+                bootstrapResult.className = colors[type] || colors.error;
+                bootstrapResult.textContent = msg;
+                bootstrapResult.classList.remove('hidden');
             }
         })();
     </script>
