@@ -90,12 +90,14 @@ body { background: #0f0f1a; }
 
 <!-- MAIN CONTENT -->
 <div class="flex-1 flex flex-col overflow-hidden">
-<div class="flex items-center justify-between px-4 py-2 border-b border-gray-800 bg-gray-900/30">
-<div class="flex items-center space-x-4">
-<span id="selected-table" class="text-sm font-medium text-gray-300">Select a table</span>
+<div class="flex items-center gap-2 px-4 py-2 border-b border-gray-800 bg-gray-900/30">
+<div class="flex items-center space-x-3 min-w-0 flex-1">
+<span id="selected-table" class="text-sm font-medium text-gray-300 whitespace-nowrap">Select a table</span>
+<input type="text" id="search-input" placeholder="Filter rows..." class="hidden w-48 px-2.5 py-1 text-xs bg-gray-700/50 border border-gray-600 rounded-md text-gray-300 placeholder-gray-500 focus:outline-none focus:border-indigo-500">
 <span id="table-status" class="text-xs text-gray-500"></span>
 </div>
 <div class="flex items-center space-x-2">
+<button onclick="exportCsv()" id="btn-export" class="hidden px-3 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-all" title="Download as CSV">⬇ CSV</button>
 <button onclick="deleteSelectedRow()" id="btn-delete-row" class="hidden px-3 py-1 text-xs bg-red-700/50 hover:bg-red-700 text-red-300 rounded-lg transition-all">🗑 Delete Row</button>
 <button onclick="showInsertRow()" id="btn-insert-row" class="hidden px-3 py-1 text-xs bg-emerald-700/50 hover:bg-emerald-700 text-emerald-300 rounded-lg transition-all">+ Insert Row</button>
 <button onclick="refreshData()" id="btn-refresh" class="hidden px-3 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-all">⟳ Refresh</button>
@@ -174,6 +176,10 @@ let editingCell = null; // {row, col, original}
 let selectedRow = -1;
 let contextRow = -1;
 let pendingNextEdit = null; // {row, col} - edit this cell after save/re-render
+let sortColumn = -1;
+let sortAsc = true;
+let searchQuery = '';
+let filterTimer = null;
 
 const tableTree = document.getElementById('table-tree');
 const dataContainer = document.getElementById('data-container');
@@ -325,34 +331,74 @@ function renderData(data) {
         return;
     }
 
-    let html = '<div class="overflow-auto h-full"><table class="data-grid w-full border-collapse">';
+    // Client-side filtering
+    let filtered = rows;
+    if(searchQuery) {
+        const q = searchQuery.toLowerCase();
+        filtered = rows.filter(row =>
+            row.some(cell => String(cell !== null ? cell : '').toLowerCase().includes(q))
+        );
+    }
+
+    // Client-side sorting
+    let sorted = filtered;
+    if(sortColumn >= 0 && sortColumn < columns.length) {
+        sorted = [...filtered].sort((a, b) => {
+            const va = a[sortColumn];
+            const vb = b[sortColumn];
+            if(va === null && vb === null) return 0;
+            if(va === null) return 1;
+            if(vb === null) return -1;
+            const na = Number(va), nb = Number(vb);
+            if(!isNaN(na) && !isNaN(nb)) return sortAsc ? na - nb : nb - na;
+            return sortAsc ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
+        });
+    }
+
+    let html = '<div class="flex flex-col h-full">';
+    html += '<div class="overflow-auto flex-1"><table class="data-grid w-full border-collapse">';
     html += '<thead><tr class="text-xs text-gray-400 uppercase">';
     html += '<th class="px-2 py-2 w-10 text-center font-medium text-gray-600">#</th>';
-    columns.forEach(col => {
-        html += `<th class="px-3 py-2 font-medium text-left whitespace-nowrap">${App.escapeHtml(col)}</th>`;
+    columns.forEach((col, ci) => {
+        const active = ci === sortColumn;
+        const arrow = active ? (sortAsc ? ' ▲' : ' ▼') : '';
+        html += `<th onclick="sortByColumn(${ci})" class="px-3 py-2 font-medium text-left whitespace-nowrap cursor-pointer hover:text-white hover:bg-gray-700/50 select-none transition-all">${App.escapeHtml(col)}<span class="${active?'text-indigo-400':'text-gray-600'} ml-1">${arrow}</span></th>`;
     });
     html += '</tr></thead><tbody>';
 
-    rows.forEach((row, ri) => {
-        const rowClass = selectedRow === ri ? 'bg-indigo-900/20' : '';
-        html += `<tr class="border-b border-gray-800/30 text-sm ${rowClass}" oncontextmenu="showContextMenu(event,${ri})">`;
-        html += `<td class="row-num cursor-pointer" onclick="selectDataRow(${ri})">${ri+1}</td>`;
+    sorted.forEach((row, ri) => {
+        const origRi = rows.indexOf(row);
+        const rowClass = selectedRow === origRi ? 'bg-indigo-900/20' : '';
+        html += `<tr class="border-b border-gray-800/30 text-sm ${rowClass}" oncontextmenu="showContextMenu(event,${origRi})">`;
+        html += `<td class="row-num cursor-pointer" onclick="selectDataRow(${origRi})">${origRi+1}</td>`;
         row.forEach((cell, ci) => {
             if(cell === null) {
-                html += `<td class="px-3 py-2 cell-null text-xs cursor-pointer" onclick="startEdit(${ri},${ci})">NULL</td>`;
+                html += `<td class="px-3 py-2 cell-null text-xs cursor-pointer" onclick="startEdit(${origRi},${ci})">NULL</td>`;
             } else {
                 const str = String(cell);
                 const display = str.length > 100 ? str.slice(0,100)+'...' : str;
-                html += `<td class="px-3 py-2 text-xs text-gray-300 font-mono max-w-[300px] overflow-hidden text-ellipsis whitespace-nowrap cursor-pointer" onclick="startEdit(${ri},${ci})" title="${App.escapeHtml(str)}">${App.escapeHtml(display)}</td>`;
+                html += `<td class="px-3 py-2 text-xs text-gray-300 font-mono max-w-[300px] overflow-hidden text-ellipsis whitespace-nowrap cursor-pointer" onclick="startEdit(${origRi},${ci})" title="${App.escapeHtml(str)}">${App.escapeHtml(display)}</td>`;
             }
         });
         html += '</tr>';
     });
 
     html += '</tbody></table></div>';
+    // Footer with row counts
+    const totalRows = rows.length;
+    const shownRows = sorted.length;
+    const isFiltered = searchQuery && shownRows !== totalRows;
+    html += `<div class="flex items-center justify-between px-4 py-1.5 border-t border-gray-800 bg-gray-900/40 text-xs text-gray-500">
+        <span>${isFiltered ? shownRows+' of ' : ''}${totalRows} row${totalRows!==1?'s':''}</span>
+        <span class="text-gray-600">${searchQuery ? 'Filtered' : ''}&nbsp;</span>
+    </div>`;
+    html += '</div>';
+
     dataContainer.innerHTML = html;
     document.getElementById('btn-refresh').classList.remove('hidden');
     document.getElementById('btn-insert-row').classList.remove('hidden');
+    document.getElementById('btn-export').classList.remove('hidden');
+    document.getElementById('search-input').classList.remove('hidden');
     updateDeleteButton();
 }
 
@@ -828,10 +874,57 @@ sqlEditor.addEventListener('keydown', (e) => {
     }
 });
 
+// ── Sort by column ──────────────────────────
+window.sortByColumn = function(ci) {
+    if(sortColumn === ci) {
+        sortAsc = !sortAsc;
+    } else {
+        sortColumn = ci;
+        sortAsc = true;
+    }
+    if(currentData) renderData(currentData);
+};
+
+// ── Search/filter ────────────────────────────
+const searchInput = document.getElementById('search-input');
+searchInput.addEventListener('input', () => {
+    clearTimeout(filterTimer);
+    filterTimer = setTimeout(() => {
+        searchQuery = searchInput.value.trim();
+        if(currentData) renderData(currentData);
+    }, 200);
+});
+
+// ── Export CSV ────────────────────────────────
+window.exportCsv = function() {
+    if(!currentData || !currentData.rows.length) {
+        App.showToast('No data to export', 'warning');
+        return;
+    }
+    const {columns, rows} = currentData;
+    const csvRows = [columns.join(','), ...rows.map(row =>
+        row.map(cell => {
+            if(cell === null) return '';
+            const s = String(cell);
+            return s.includes(',') || s.includes('"') || s.includes('\n') ? '"' + s.replace(/"/g, '""') + '"' : s;
+        }).join(',')
+    )];
+    const csv = csvRows.join('\n');
+    const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = (selectedTable || 'export') + '.csv';
+    link.click();
+    URL.revokeObjectURL(link.href);
+    App.showToast(rows.length+' rows exported', 'success');
+};
+
 // ── Refresh data ──────────────────────────────
 window.refreshData = function() {
     if(selectedTable) {
         tableStatus.textContent = 'Refreshing...';
+        sortColumn = -1;
+        sortAsc = true;
         loadTableData(selectedTable, currentSchema||'public');
         tableStatus.textContent = '';
     }
