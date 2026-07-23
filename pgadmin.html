@@ -96,8 +96,9 @@ body { background: #0f0f1a; }
 <span id="table-status" class="text-xs text-gray-500"></span>
 </div>
 <div class="flex items-center space-x-2">
-<button onclick="refreshData()" id="btn-refresh" class="hidden px-3 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-all">⟳ Refresh</button>
+<button onclick="deleteSelectedRow()" id="btn-delete-row" class="hidden px-3 py-1 text-xs bg-red-700/50 hover:bg-red-700 text-red-300 rounded-lg transition-all">🗑 Delete Row</button>
 <button onclick="showInsertRow()" id="btn-insert-row" class="hidden px-3 py-1 text-xs bg-emerald-700/50 hover:bg-emerald-700 text-emerald-300 rounded-lg transition-all">+ Insert Row</button>
+<button onclick="refreshData()" id="btn-refresh" class="hidden px-3 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-all">⟳ Refresh</button>
 </div>
 </div>
 
@@ -152,7 +153,7 @@ body { background: #0f0f1a; }
 <!-- Context Menu -->
 <div id="context-menu" class="context-menu hidden bg-gray-800 border border-gray-700 rounded-lg shadow-xl py-1 text-sm text-gray-300">
 <button onclick="editCell()" class="hover:bg-gray-700"><span class="text-indigo-400">✎</span> Edit Cell</button>
-<button onclick="deleteSelectedRow()" class="hover:bg-gray-700"><span class="text-red-400">✕</span> Delete Row</button>
+<button onclick="deleteContextRow()" class="hover:bg-gray-700"><span class="text-red-400">✕</span> Delete Row</button>
 <button onclick="copyCellValue()" class="hover:bg-gray-700"><span class="text-gray-400">⎘</span> Copy Cell</button>
 <button onclick="copyRowAsInsert()" class="hover:bg-gray-700"><span class="text-emerald-400">⤴</span> Copy Row as INSERT</button>
 </div>
@@ -172,6 +173,7 @@ let currentTab = 'data';
 let editingCell = null; // {row, col, original}
 let selectedRow = -1;
 let contextRow = -1;
+let pendingNextEdit = null; // {row, col} - edit this cell after save/re-render
 
 const tableTree = document.getElementById('table-tree');
 const dataContainer = document.getElementById('data-container');
@@ -319,6 +321,7 @@ function renderData(data) {
     const {columns, rows} = data;
     if(!columns || !columns.length) {
         dataContainer.innerHTML = '<div class="empty-state py-12"><p class="text-sm text-gray-500">No data</p></div>';
+        updateDeleteButton();
         return;
     }
 
@@ -328,22 +331,21 @@ function renderData(data) {
     columns.forEach(col => {
         html += `<th class="px-3 py-2 font-medium text-left whitespace-nowrap">${App.escapeHtml(col)}</th>`;
     });
-    html += '<th class="px-2 py-2 w-16"></th>'; // actions
     html += '</tr></thead><tbody>';
 
     rows.forEach((row, ri) => {
         const rowClass = selectedRow === ri ? 'bg-indigo-900/20' : '';
-        html += `<tr class="border-b border-gray-800/30 text-sm ${rowClass}" onclick="selectDataRow(${ri})" oncontextmenu="showContextMenu(event,${ri})">`;
-        html += `<td class="row-num">${ri+1}</td>`;                row.forEach((cell, ci) => {
+        html += `<tr class="border-b border-gray-800/30 text-sm ${rowClass}" oncontextmenu="showContextMenu(event,${ri})">`;
+        html += `<td class="row-num cursor-pointer" onclick="selectDataRow(${ri})">${ri+1}</td>`;
+        row.forEach((cell, ci) => {
             if(cell === null) {
-                html += `<td class="px-3 py-2 cell-null text-xs" ondblclick="startEdit(${ri},${ci})">NULL</td>`;
+                html += `<td class="px-3 py-2 cell-null text-xs cursor-pointer" onclick="startEdit(${ri},${ci})">NULL</td>`;
             } else {
                 const str = String(cell);
                 const display = str.length > 100 ? str.slice(0,100)+'...' : str;
-                html += `<td class="px-3 py-2 text-xs text-gray-300 font-mono max-w-[300px] overflow-hidden text-ellipsis whitespace-nowrap" ondblclick="startEdit(${ri},${ci})" title="${App.escapeHtml(str)}">${App.escapeHtml(display)}</td>`;
+                html += `<td class="px-3 py-2 text-xs text-gray-300 font-mono max-w-[300px] overflow-hidden text-ellipsis whitespace-nowrap cursor-pointer" onclick="startEdit(${ri},${ci})" title="${App.escapeHtml(str)}">${App.escapeHtml(display)}</td>`;
             }
         });
-        html += '<td class="px-2 py-2 text-center"><button onclick="deleteRowByIndex('+ri+')" class="text-red-500/50 hover:text-red-400 transition-colors" title="Delete row">✕</button></td>';
         html += '</tr>';
     });
 
@@ -351,6 +353,7 @@ function renderData(data) {
     dataContainer.innerHTML = html;
     document.getElementById('btn-refresh').classList.remove('hidden');
     document.getElementById('btn-insert-row').classList.remove('hidden');
+    updateDeleteButton();
 }
 
 // ── Render structure ────────────────────────────
@@ -399,9 +402,19 @@ window.switchTab = function(tab) {
 
 // ── Row selection & context menu ────────────────
 window.selectDataRow = function(ri) {
-    selectedRow = ri;
-    // Re-render to show highlight
-    if(currentData) renderData(currentData);
+    // Toggle selection on same row
+    if(selectedRow === ri) {
+        selectedRow = -1;
+    } else {
+        selectedRow = ri;
+    }
+    // Update visual highlight on DOM directly, no re-render
+    const tbody = dataContainer.querySelector('table tbody');
+    if(!tbody) return;
+    Array.from(tbody.children).forEach((tr, i) => {
+        tr.classList.toggle('bg-indigo-900/20', i === selectedRow);
+    });
+    updateDeleteButton();
 };
 
 window.showContextMenu = function(e, ri) {
@@ -421,20 +434,32 @@ function hideContextMenu() {
 // ── Inline editing ─────────────────────────────
 window.startEdit = function(ri, ci) {
     if(!currentData || !currentData.rows[ri]) return;
-    if(editingCell) return; // already editing
+    
+    // Cancel any ongoing edit first
+    if(editingCell) {
+        editingCell = null;
+    }
     
     const row = currentData.rows[ri];
     const original = row[ci];
     editingCell = {row: ri, col: ci, original};
     selectedRow = ri;
-    renderData(currentData);
+    pendingNextEdit = null;
+    
+    // Update row highlight
+    const tbody = dataContainer.querySelector('table tbody');
+    if(tbody) {
+        Array.from(tbody.children).forEach((tr, i) => {
+            tr.classList.toggle('bg-indigo-900/20', i === ri);
+        });
+    }
+    updateDeleteButton();
     
     // Find the cell and replace with input
     const table = dataContainer.querySelector('table');
     if(!table) return;
     const tr = table.querySelectorAll('tbody tr')[ri];
     if(!tr) return;
-    // Skip first column (row num) and last column (actions)
     const td = tr.querySelectorAll('td')[ci + 1]; // +1 for row num
     if(!td) return;
     
@@ -449,23 +474,21 @@ window.startEdit = function(ri, ci) {
     input.addEventListener('keydown', function handler(e) {
         if(e.key === 'Enter') {
             e.preventDefault();
+            // Save and move to same column in next row
+            pendingNextEdit = (ri + 1 < currentData.rows.length) ? {row: ri + 1, col: ci} : null;
             saveEdit(input.value);
         } else if(e.key === 'Escape') {
             cancelEdit();
         } else if(e.key === 'Tab') {
             e.preventDefault();
-            saveEdit(input.value);
-            // Move to next cell
             const nextCi = ci + 1 < currentData.columns.length ? ci + 1 : 0;
             const nextRi = nextCi === 0 ? ri + 1 : ri;
-            if(nextRi < currentData.rows.length) {
-                setTimeout(() => startEdit(nextRi, nextCi), 50);
-            }
+            pendingNextEdit = (nextRi < currentData.rows.length) ? {row: nextRi, col: nextCi} : null;
+            saveEdit(input.value);
         }
     });
     
     input.addEventListener('blur', () => {
-        // Save on blur unless cancelled
         setTimeout(() => {
             if(editingCell) saveEdit(input.value);
         }, 200);
@@ -478,26 +501,32 @@ async function saveEdit(newValue) {
     const column = currentData.columns[col];
     const pkCol = currentPK;
     
+    const nextEdit = pendingNextEdit; // Capture before clearing
     editingCell = null;
+    pendingNextEdit = null;
     
     if(newValue === (original !== null ? String(original) : '')) {
-        // No change
-        if(currentData) renderData(currentData);
+        // No change - just move to next edit if pending
+        if(nextEdit) {
+            if(currentData) renderData(currentData);
+            setTimeout(() => startEdit(nextEdit.row, nextEdit.col), 100);
+        } else {
+            if(currentData) renderData(currentData);
+        }
         return;
     }
     
     // Build UPDATE query
     if(!pkCol) {
         App.showToast('Cannot edit: table has no primary key', 'error');
-        if(currentData) renderData(currentData);
+        nextEdit ? renderData(currentData) : null;
         return;
     }
     
-    // Find the PK value for this row
     const pkIdx = currentData.columns.indexOf(pkCol);
     if(pkIdx === -1) {
-        App.showToast('Cannot edit: primary key column not found', 'error');
-        if(currentData) renderData(currentData);
+        App.showToast('Primary key column not found', 'error');
+        nextEdit ? renderData(currentData) : null;
         return;
     }
     
@@ -508,12 +537,9 @@ async function saveEdit(newValue) {
         let escapedValue;
         if(newValue === '') {
             escapedValue = 'NULL';
-        } else if(column.endsWith('_uuid') || column.endsWith('_id') || column.endsWith('_at') || column.includes('date') || column.includes('timestamp')) {
-            escapedValue = "'" + newValue.replace(/'/g, "''") + "'";
         } else {
-            // Try as number first
             const num = Number(newValue);
-            if(!isNaN(num) && column !== 'text' && column !== 'character varying') {
+            if(!isNaN(num) && column !== 'text' && column !== 'character varying' && column !== 'TEXT' && column !== 'CHARACTER VARYING') {
                 escapedValue = newValue;
             } else {
                 escapedValue = "'" + newValue.replace(/'/g, "''") + "'";
@@ -521,13 +547,19 @@ async function saveEdit(newValue) {
         }
         
         const pkEscaped = typeof pkValue === 'string' ? "'" + pkValue.replace(/'/g, "''") + "'" : pkValue;
-        const query = `UPDATE "${schema}"."${selectedTable}" SET "${column}" = ${escapedValue} WHERE "${pkCol}" = ${pkEscaped}`;
+        const query = `UPDATE "${schema}"."${selectedTable}" SET "${column}" = ${escapedValue} WHERE "${currentPK}" = ${pkEscaped}`;
         
         const result = await apiPost('/api/admin/db/execute', {query});
         if(result && result.success) {
             App.showToast('Cell updated', 'success');
-            // Refresh data
-            loadTableData(selectedTable, currentSchema||'public');
+            // Refresh data and optionally move to next cell
+            editingCell = null;
+            const nxt = nextEdit;
+            await loadTableData(selectedTable, schema);
+            // Guard: don't override if user started editing another cell during save
+            if(nxt && !editingCell && nxt.row < currentData.rows.length) {
+                setTimeout(() => startEdit(nxt.row, nxt.col), 150);
+            }
         }
     } catch(e) {
         App.showToast('Edit failed: '+e.message, 'error');
@@ -537,16 +569,36 @@ async function saveEdit(newValue) {
 
 function cancelEdit() {
     editingCell = null;
+    pendingNextEdit = null;
     if(currentData) renderData(currentData);
 }
 
-// ── Delete row ────────────────────────────────
-window.deleteRowByIndex = async function(ri) {
-    if(!selectedTable || !currentPK || !currentData) {
+// ── Legacy delete (kept for safety) ────────────
+window.deleteRowByIndex = window.deleteSelectedRow;
+
+// ── Toolbar delete & update ───────────────────
+function updateDeleteButton() {
+    const btn = document.getElementById('btn-delete-row');
+    if(!btn) return;
+    if(selectedRow >= 0 && currentData && selectedRow < currentData.rows.length) {
+        btn.classList.remove('hidden');
+    } else {
+        btn.classList.add('hidden');
+    }
+}
+
+window.deleteSelectedRow = function() {
+    hideContextMenu();
+    if(selectedRow < 0 || !currentData || !selectedTable) {
+        App.showToast('Select a row first', 'warning');
+        return;
+    }
+    const ri = selectedRow;
+    if(!currentPK) {
         App.showToast('Cannot delete: table has no primary key', 'error');
         return;
     }
-    if(!confirm('Delete this row?')) return;
+    if(!confirm('Delete row '+(ri+1)+'?')) return;
     
     const pkIdx = currentData.columns.indexOf(currentPK);
     if(pkIdx === -1) { App.showToast('PK column not found', 'error'); return; }
@@ -555,21 +607,19 @@ window.deleteRowByIndex = async function(ri) {
     const schema = currentSchema || 'public';
     const pkEscaped = typeof pkValue === 'string' ? "'" + pkValue.replace(/'/g, "''") + "'" : pkValue;
     
-    try {
-        const result = await apiPost('/api/admin/db/execute', {
-            query: `DELETE FROM "${schema}"."${selectedTable}" WHERE "${currentPK}" = ${pkEscaped}`
-        });
+    apiPost('/api/admin/db/execute', {
+        query: `DELETE FROM "${schema}"."${selectedTable}" WHERE "${currentPK}" = ${pkEscaped}`
+    }).then(result => {
         if(result && result.success) {
             App.showToast('Row deleted', 'success');
+            selectedRow = -1;
+            updateDeleteButton();
             loadTableData(selectedTable, schema);
         }
-    } catch(e) {
+    }).catch(e => {
         App.showToast('Delete failed: '+e.message, 'error');
-    }
+    });
 };
-
-// Keep legacy alias
-window.deleteRow = window.deleteRowByIndex;
 
 // ── Insert row ────────────────────────────────
 window.showInsertRow = function() {
@@ -670,11 +720,12 @@ window.editCell = function() {
     startEdit(contextRow, 0);
 };
 
-window.deleteSelectedRow = function() {
+window.deleteContextRow = function() {
     hideContextMenu();
-    if(contextRow < 0 || !currentData) return;
-    const row = currentData.rows[contextRow];
-    deleteRow(encodeURIComponent(JSON.stringify(row)), contextRow);
+    if(contextRow < 0 || !currentData || !selectedTable) return;
+    selectedRow = contextRow;
+    updateDeleteButton();
+    deleteSelectedRow();
 };
 
 window.copyCellValue = function() {
