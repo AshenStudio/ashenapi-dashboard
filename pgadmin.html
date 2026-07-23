@@ -1,477 +1,799 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Database · Ashen Studio</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="config.js"></script>
-    <script src="api.js"></script>
-    <script src="app.js"></script>
-    <style>
-        body { background: #0f0f1a; }
-        .card-subtle { background: rgba(31, 41, 55, 0.6); border: 1px solid rgba(75, 85, 99, 0.3); }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .animate-fade-in { animation: fadeIn 0.4s ease-out; }
-
-        /* SQL Editor */
-        .sql-editor {
-            font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
-            font-size: 13px;
-            line-height: 1.6;
-            tab-size: 4;
-            resize: vertical;
-            min-height: 180px;
-            max-height: 500px;
-            outline: none;
-        }
-        .sql-editor:focus {
-            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3);
-        }
-
-        /* Results table */
-        .results-table { font-size: 13px; }
-        .results-table th {
-            position: sticky;
-            top: 0;
-            background: #1f2937;
-            z-index: 10;
-        }
-        .results-table tr:hover td {
-            background: rgba(55, 65, 81, 0.4);
-        }
-        .results-table td, .results-table th {
-            max-width: 300px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        /* Keyboard shortcut badge */
-        .kbd {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            padding: 1px 5px;
-            font-size: 10px;
-            font-family: inherit;
-            background: rgba(75, 85, 99, 0.5);
-            border: 1px solid rgba(107, 114, 128, 0.3);
-            border-radius: 4px;
-            color: #9ca3af;
-            min-width: 18px;
-        }
-
-        /* Line numbers for editor */
-        .editor-wrapper {
-            position: relative;
-        }
-        .line-numbers {
-            position: absolute;
-            left: 0;
-            top: 0;
-            bottom: 0;
-            width: 40px;
-            padding: 12px 0;
-            text-align: right;
-            color: #4b5563;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 13px;
-            line-height: 1.6;
-            overflow: hidden;
-            user-select: none;
-            pointer-events: none;
-        }
-        .line-numbers span {
-            display: block;
-            padding-right: 12px;
-        }
-
-        /* Status indicator */
-        .status-dot {
-            display: inline-block;
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            margin-right: 6px;
-        }
-        .status-dot.success { background: #34d399; }
-        .status-dot.error { background: #f87171; }
-        .status-dot.running { background: #fbbf24; animation: pulse 1s infinite; }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-
-        .schema-tree-item {
-            transition: all 0.15s ease;
-        }
-        .schema-tree-item:hover {
-            background: rgba(55, 65, 81, 0.5);
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Database · Ashen Studio</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="config.js"></script>
+<script src="api.js"></script>
+<script src="app.js"></script>
+<style>
+* { scrollbar-width: thin; scrollbar-color: #374151 transparent; }
+body { background: #0f0f1a; }
+.card-subtle { background: rgba(31,41,55,0.6); border: 1px solid rgba(75,85,99,0.3); }
+@keyframes fadeIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+.animate-fade-in { animation: fadeIn .4s ease-out; }
+.table-tree-item { transition: all .15s ease; cursor:pointer; }
+.table-tree-item:hover { background: rgba(55,65,81,0.5); }
+.table-tree-item.active { background: rgba(99,102,241,0.15); border-color: #6366f1; }
+.tab-btn { transition: all .2s ease; cursor:pointer; position:relative; }
+.tab-btn.active { color: #a5b4fc; border-bottom-color: #6366f1; }
+.tab-btn.active::after { content:''; position:absolute; bottom:-1px; left:0; right:0; height:2px; background:#6366f1; border-radius:1px; }
+.data-grid { font-size: 13px; }
+.data-grid th { position:sticky; top:0; background:#1f2937; z-index:10; border-bottom:2px solid #374151; }
+.data-grid td { transition: background .15s ease; }
+.data-grid tr:hover td { background: rgba(55,65,81,0.3); }
+.data-grid td.editing { padding:0; }
+.data-grid td.editing input { width:100%; height:100%; border:2px solid #6366f1; background:#1f2937; color:#e5e7eb; padding:6px 8px; outline:none; font-family:inherit; font-size:inherit; border-radius:0; }
+.data-grid td.selected { box-shadow:inset 0 0 0 2px #6366f1; }
+.sql-editor { font-family:'JetBrains Mono','Fira Code','Consolas',monospace; font-size:13px; line-height:1.6; tab-size:4; resize:vertical; min-height:120px; max-height:400px; outline:none; }
+.sql-editor:focus { box-shadow:0 0 0 2px rgba(99,102,241,0.3); }
+.status-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; }
+.status-dot.success { background:#34d399; }
+.status-dot.error { background:#f87171; }
+.status-dot.running { background:#fbbf24; animation:pulse 1s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+.kbd { display:inline-flex; align-items:center; justify-content:center; padding:1px 5px; font-size:10px; background:rgba(75,85,99,0.5); border:1px solid rgba(107,114,128,0.3); border-radius:4px; color:#9ca3af; }
+.row-num { color:#4b5563; font-size:11px; text-align:right; padding-right:8px; user-select:none; min-width:40px; }
+.cell-null { color:#6b7280; font-style:italic; }
+.cell-truncated { color:#9ca3af; }
+.badge { display:inline-flex; align-items:center; padding:1px 8px; border-radius:999px; font-size:10px; font-weight:500; }
+.badge-primary { background:rgba(99,102,241,0.15); color:#a5b4fc; border:1px solid rgba(99,102,241,0.3); }
+.badge-success { background:rgba(52,211,153,0.15); color:#34d399; border:1px solid rgba(52,211,153,0.3); }
+.badge-warning { background:rgba(251,191,36,0.15); color:#fbbf24; border:1px solid rgba(251,191,36,0.3); }
+.tree-toggle { transition:transform .2s ease; }
+.tree-toggle.expanded { transform:rotate(90deg); }
+.context-menu { position:fixed; z-index:100; min-width:160px; }
+.context-menu button { width:100%; text-align:left; padding:6px 12px; font-size:13px; }
+.context-menu button:hover { background:rgba(99,102,241,0.15); }
+.empty-state { color:#6b7280; text-align:center; padding:60px 20px; }
+.empty-state svg { margin:0 auto 16px; }
+</style>
 </head>
 <body class="min-h-screen text-gray-100">
 
-    <!-- Navigation -->
-    <nav class="bg-gray-900/90 backdrop-blur-sm border-b border-gray-800 sticky top-0 z-50">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex items-center justify-between h-16">
-                <div class="flex items-center space-x-8">
-                    <a href="index.html" class="flex items-center space-x-2 text-white font-bold text-lg">
-                        <span class="inline-flex items-center justify-center w-8 h-8 bg-indigo-600 rounded-lg">
-                            <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
-                            </svg>
-                        </span>
-                        <span>Ashen</span>
-                    </a>
-                    <div class="hidden md:flex space-x-1">
-                        <a href="index.html" class="nav-link px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-all">Dashboard</a>
-                        <a href="releases.html" class="nav-link px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-all">Releases</a>
-                        <a href="accounts.html" class="nav-link px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-all">Accounts</a>
-                        <a href="migrations.html" class="nav-link px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-all">Migrations</a>
-                        <a href="pgadmin.html" class="nav-link px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-all">Database</a>
-                    </div>
-                </div>
-                <div class="flex items-center space-x-3">
-                    <span class="text-sm text-gray-400 hidden sm:block" id="username-display"></span>
-                    <button onclick="logout()" class="js-auth-show px-3 py-1.5 text-sm text-gray-400 hover:text-red-400 hover:bg-red-900/30 rounded-lg transition-all">Logout</button>
-                </div>
+<nav class="bg-gray-900/90 backdrop-blur-sm border-b border-gray-800 sticky top-0 z-50">
+<div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
+<div class="flex items-center justify-between h-14">
+<div class="flex items-center space-x-6">
+<a href="index.html" class="flex items-center space-x-2 text-white font-bold text-lg">
+<span class="inline-flex items-center justify-center w-8 h-8 bg-indigo-600 rounded-lg">
+<svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/></svg></span><span>Ashen</span></a>
+<div class="hidden md:flex space-x-1">
+<a href="index.html" class="nav-link px-3 py-1.5 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-all">Dashboard</a>
+<a href="releases.html" class="nav-link px-3 py-1.5 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-all">Releases</a>
+<a href="accounts.html" class="nav-link px-3 py-1.5 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-all">Accounts</a>
+<a href="migrations.html" class="nav-link px-3 py-1.5 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-all">Migrations</a>
+<a href="pgadmin.html" class="nav-link px-3 py-1.5 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-all">Database</a>
+</div></div>
+<button onclick="logout()" class="text-sm text-gray-400 hover:text-red-400 hover:bg-red-900/30 px-3 py-1.5 rounded-lg transition-all">Logout</button>
+</div></div></nav>
+
+<div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+<main class="animate-fade-in flex" style="height:calc(100vh - 56px)">
+<!-- LEFT SIDEBAR -->
+<aside class="w-64 flex-shrink-0 border-r border-gray-800 bg-gray-900/50 flex flex-col overflow-hidden">
+<div class="px-3 py-2.5 border-b border-gray-800 flex items-center justify-between">
+<h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Tables</h2>
+<button onclick="loadTables()" class="text-gray-500 hover:text-white transition-colors" title="Refresh">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+</button>
+</div>
+<div id="table-tree" class="flex-1 overflow-y-auto p-2 space-y-0.5 text-sm">
+<div class="empty-state py-8">
+<svg class="w-8 h-8 mx-auto mb-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+<p class="text-xs text-gray-500">Loading tables...</p>
+</div></div>
+</aside>
+
+<!-- MAIN CONTENT -->
+<div class="flex-1 flex flex-col overflow-hidden">
+<div class="flex items-center justify-between px-4 py-2 border-b border-gray-800 bg-gray-900/30">
+<div class="flex items-center space-x-4">
+<span id="selected-table" class="text-sm font-medium text-gray-300">Select a table</span>
+<span id="table-status" class="text-xs text-gray-500"></span>
+</div>
+<div class="flex items-center space-x-2">
+<button onclick="refreshData()" id="btn-refresh" class="hidden px-3 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-all">⟳ Refresh</button>
+<button onclick="showInsertRow()" id="btn-insert-row" class="hidden px-3 py-1 text-xs bg-emerald-700/50 hover:bg-emerald-700 text-emerald-300 rounded-lg transition-all">+ Insert Row</button>
+</div>
+</div>
+
+<!-- TABS -->
+<div class="flex space-x-1 px-4 pt-2 border-b border-gray-800 bg-gray-900/20">
+<button onclick="switchTab('data')" id="tab-data" class="tab-btn px-4 py-2 text-xs font-medium text-gray-500 hover:text-gray-300 border-b-2 border-transparent active">Data</button>
+<button onclick="switchTab('structure')" id="tab-structure" class="tab-btn px-4 py-2 text-xs font-medium text-gray-500 hover:text-gray-300 border-b-2 border-transparent">Structure</button>
+<button onclick="switchTab('sql')" id="tab-sql" class="tab-btn px-4 py-2 text-xs font-medium text-gray-500 hover:text-gray-300 border-b-2 border-transparent">SQL Query</button>
+</div>
+
+<!-- TAB: DATA -->
+<div id="panel-data" class="flex-1 overflow-auto">
+<div id="data-container" class="h-full">
+<div class="empty-state py-20">
+<svg class="w-12 h-12 mx-auto mb-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+<p class="text-sm">Select a table from the left panel</p>
+<p class="text-xs text-gray-600 mt-1">Or use the SQL tab to run custom queries</p>
+</div></div></div>
+
+<!-- TAB: STRUCTURE (hidden) -->
+<div id="panel-structure" class="flex-1 overflow-auto hidden">
+<div id="structure-container" class="h-full">
+<div class="empty-state py-20"><p class="text-sm text-gray-500">Select a table to view its structure</p></div>
+</div></div>
+
+<!-- TAB: SQL (hidden) -->
+<div id="panel-sql" class="hidden flex flex-col flex-1">
+<div class="p-3 border-b border-gray-800">
+<div class="flex items-center justify-between mb-2">
+<h3 class="text-xs font-semibold text-gray-400 uppercase">Write SQL</h3>
+<div class="flex items-center space-x-2">
+<span class="text-xs text-gray-500">Read-only</span>
+<label class="relative inline-flex items-center cursor-pointer">
+<input type="checkbox" id="write-toggle" class="sr-only peer">
+<div class="w-9 h-5 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-600"></div>
+</label>
+<span class="text-xs text-amber-400">Write</span>
+</div>
+</div>
+<textarea id="sql-editor" class="sql-editor w-full bg-gray-900/50 text-gray-100 p-3 rounded-lg border border-gray-700 placeholder-gray-600" placeholder="Enter SQL... Ctrl+Enter to run" spellcheck="false" rows="5">SELECT * FROM "Accounts" LIMIT 50</textarea>
+<div class="flex items-center justify-between mt-2">
+<div id="sql-status" class="text-xs text-gray-500">Ready</div>
+<div class="flex space-x-2">
+<button onclick="runSqlQuery()" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium rounded-lg transition-all">▶ Run</button>
+</div></div></div>
+<div id="sql-results" class="flex-1 overflow-auto">
+<div class="empty-state py-12"><p class="text-sm text-gray-500">Run a query to see results</p></div>
+</div></div>
+</div>
+</div>
+
+<!-- Context Menu -->
+<div id="context-menu" class="context-menu hidden bg-gray-800 border border-gray-700 rounded-lg shadow-xl py-1 text-sm text-gray-300">
+<button onclick="editCell()" class="hover:bg-gray-700"><span class="text-indigo-400">✎</span> Edit Cell</button>
+<button onclick="deleteSelectedRow()" class="hover:bg-gray-700"><span class="text-red-400">✕</span> Delete Row</button>
+<button onclick="copyCellValue()" class="hover:bg-gray-700"><span class="text-gray-400">⎘</span> Copy Cell</button>
+<button onclick="copyRowAsInsert()" class="hover:bg-gray-700"><span class="text-emerald-400">⤴</span> Copy Row as INSERT</button>
+</div>
+
+<script>
+(function(){'use strict';
+if(!App.requireAuth()) return;
+
+// ── State ─────────────────────────────────────────
+let tables = [];
+let selectedTable = null;
+let currentSchema = null;
+let currentData = null;
+let currentColumns = [];
+let currentPK = null;
+let currentTab = 'data';
+let editingCell = null; // {row, col, original}
+let selectedRow = -1;
+let contextRow = -1;
+
+const tableTree = document.getElementById('table-tree');
+const dataContainer = document.getElementById('data-container');
+const structureContainer = document.getElementById('structure-container');
+const sqlResults = document.getElementById('sql-results');
+const sqlEditor = document.getElementById('sql-editor');
+const sqlStatus = document.getElementById('sql-status');
+const selectedTableEl = document.getElementById('selected-table');
+const tableStatus = document.getElementById('table-status');
+const writeToggle = document.getElementById('write-toggle');
+
+// ── API helpers ───────────────────────────────────
+async function apiGet(url) {
+    const token = getToken();
+    const res = await fetch(CFG().apiUrl + url, {
+        headers: {'Authorization':'Bearer '+token, 'Accept':'application/json'}
+    });
+    if(res.status===401) { logout(); return null; }
+    if(!res.ok) { const b=await res.json().catch(()=>({})); throw new Error(b.detail||'HTTP '+res.status); }
+    return res.json();
+}
+
+async function apiPost(url, body) {
+    const token = getToken();
+    const res = await fetch(CFG().apiUrl + url, {
+        method:'POST', headers:{'Authorization':'Bearer '+token, 'Content-Type':'application/json', 'Accept':'application/json'},
+        body: JSON.stringify(body)
+    });
+    if(res.status===401) { logout(); return null; }
+    if(!res.ok) { const b=await res.json().catch(()=>({})); throw new Error(b.detail||'HTTP '+res.status); }
+    return res.json();
+}
+
+// ── Load tables ──────────────────────────────────
+async function loadTables() {
+    tableTree.innerHTML = '<div class="text-center py-6 text-xs text-gray-500">Loading...</div>';
+    try {
+        const data = await apiGet('/api/admin/db/tables');
+        if(!data) return;
+        tables = data.tables || [];
+        renderTableTree();
+    } catch(e) {
+        tableTree.innerHTML = '<div class="text-center py-6 text-xs text-red-400">'+App.escapeHtml(e.message)+'</div>';
+    }
+}
+window.loadTables = loadTables;
+
+function renderTableTree() {
+    if(!tables.length) {
+        tableTree.innerHTML = '<div class="text-center py-6 text-xs text-gray-500">No tables found</div>';
+        return;
+    }
+    // Group by schema
+    const schemas = {};
+    tables.forEach(t => {
+        const s = t.table_schema || 'public';
+        if(!schemas[s]) schemas[s] = [];
+        schemas[s].push(t);
+    });
+
+    let html = '';
+    const schemaKeys = Object.keys(schemas).sort();
+    schemaKeys.forEach((schema, si) => {
+        const expanded = si === 0; // first expanded
+        html += `<div class="mb-1">
+            <div onclick="toggleSchema('schema-${si}')" class="flex items-center space-x-1.5 px-2 py-1 rounded cursor-pointer hover:bg-gray-800 text-xs text-gray-400 hover:text-gray-200">
+                <svg class="w-3 h-3 tree-toggle ${expanded?'expanded':''}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                <span>${App.escapeHtml(schema)}</span>
+                <span class="text-gray-600 ml-auto">${schemas[s].length}</span>
             </div>
-        </div>
-    </nav>
+            <div id="schema-${si}" class="${expanded?'':'hidden'} space-y-0.5 ml-2">`;
+        schemas[s].forEach(t => {
+            const active = selectedTable === t.table_name && currentSchema === t.table_schema;
+            html += `<div onclick="selectTable('${t.table_schema}','${t.table_name}')" class="table-tree-item px-3 py-1.5 rounded-lg text-xs flex items-center space-x-2 ${active?'active':''}">
+                <svg class="w-3.5 h-3.5 flex-shrink-0 ${active?'text-indigo-400':'text-gray-500'}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+                <span class="${active?'text-white':'text-gray-300'}">${App.escapeHtml(t.table_name)}</span>
+                ${t.row_count != null ? `<span class="text-gray-600 ml-auto text-[10px]">${t.row_count}</span>` : ''}
+            </div>`;
+        });
+        html += '</div></div>';
+    });
+    tableTree.innerHTML = html;
+}
 
-    <!-- Toast -->
-    <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+window.toggleSchema = function(id) {
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.classList.toggle('hidden');
+    const svg = el.previousElementSibling?.querySelector('.tree-toggle');
+    if(svg) svg.classList.toggle('expanded');
+};
 
-    <main class="animate-fade-in">
-        <!-- Header -->
-        <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-4">
-            <div class="flex items-center justify-between">
-                <div class="flex items-center space-x-4">
-                    <div>
-                        <h1 class="text-2xl font-bold text-white">Database Query Editor</h1>
-                        <p class="text-gray-400 text-sm mt-0.5">Run read-only SQL queries against the PostgreSQL database.</p>
-                    </div>
-                </div>
-                <div id="connection-indicator" class="flex items-center text-xs text-gray-500">
-                    <span class="status-dot success"></span>
-                    <span>Connected</span>
-                </div>
-            </div>
-        </div>
+// ── Select table ─────────────────────────────────
+window.selectTable = async function(schema, table) {
+    selectedTable = table;
+    currentSchema = schema;
+    selectedTableEl.textContent = table;
+    
+    // Highlight in tree
+    document.querySelectorAll('.table-tree-item').forEach(el => el.classList.remove('active'));
+    const items = document.querySelectorAll('.table-tree-item');
+    items.forEach(el => {
+        if(el.textContent.trim() === table || el.textContent.trim().startsWith(table)) {
+            el.classList.add('active');
+        }
+    });
 
-        <div class="px-4 sm:px-6 lg:px-8 pb-6">
-            <div class="grid grid-cols-1 xl:grid-cols-4 gap-6">
+    document.getElementById('btn-refresh').classList.remove('hidden');
+    document.getElementById('btn-insert-row').classList.remove('hidden');
+    tableStatus.textContent = 'Loading...';
 
-                <!-- Sidebar: Schema browser -->
-                <div class="xl:col-span-1 order-2 xl:order-1">
-                    <div class="card-subtle rounded-xl">
-                        <div class="px-4 py-3 border-b border-gray-700/50 flex items-center justify-between">
-                            <h2 class="text-sm font-semibold text-gray-300">Quick Actions</h2>
-                        </div>
-                        <div class="p-3 space-y-1">
-                            <button onclick="quickSelect('Accounts')"
-                                    class="schema-tree-item w-full text-left px-3 py-2 rounded-lg text-xs text-gray-400 hover:text-white font-mono">
-                                <span class="text-indigo-400">SELECT</span> * FROM "Accounts"
-                            </button>
-                            <button onclick="quickSelect('Identities')"
-                                    class="schema-tree-item w-full text-left px-3 py-2 rounded-lg text-xs text-gray-400 hover:text-white font-mono">
-                                <span class="text-indigo-400">SELECT</span> * FROM "Identities"
-                            </button>
-                            <button onclick="quickSelect('Releases')"
-                                    class="schema-tree-item w-full text-left px-3 py-2 rounded-lg text-xs text-gray-400 hover:text-white font-mono">
-                                <span class="text-indigo-400">SELECT</span> * FROM "Releases"
-                            </button>
-                            <button onclick="quickSelect('RefreshTokens')"
-                                    class="schema-tree-item w-full text-left px-3 py-2 rounded-lg text-xs text-gray-400 hover:text-white font-mono">
-                                <span class="text-indigo-400">SELECT</span> * FROM "RefreshTokens"
-                            </button>
-                            <button onclick="quickSelect('LauncherSessions')"
-                                    class="schema-tree-item w-full text-left px-3 py-2 rounded-lg text-xs text-gray-400 hover:text-white font-mono">
-                                <span class="text-indigo-400">SELECT</span> * FROM "LauncherSessions"
-                            </button>
-                            <button onclick="quickSelect('MigrationLogs')"
-                                    class="schema-tree-item w-full text-left px-3 py-2 rounded-lg text-xs text-gray-400 hover:text-white font-mono">
-                                <span class="text-indigo-400">SELECT</span> * FROM "MigrationLogs"
-                            </button>
-                            <button onclick="quickSelect('MigrationRetryRequests')"
-                                    class="schema-tree-item w-full text-left px-3 py-2 rounded-lg text-xs text-gray-400 hover:text-white font-mono">
-                                <span class="text-indigo-400">SELECT</span> * FROM "MigrationRetryRequests"
-                            </button>
-                            <div class="border-t border-gray-700/30 my-2"></div>
-                            <button onclick="runQuery(&quot;SELECT table_name, table_schema FROM information_schema.tables WHERE table_schema NOT IN ('pg_catalog', 'information_schema') ORDER BY table_schema, table_name&quot;)"
-                                    class="schema-tree-item w-full text-left px-3 py-2 rounded-lg text-xs text-gray-400 hover:text-white font-mono">
-                                <span class="text-emerald-400">SHOW</span> All Tables
-                            </button>
-                            <button onclick="runQuery(&quot;SELECT schemaname, tablename, tableowner FROM pg_tables WHERE schemaname NOT IN ('pg_catalog', 'information_schema') ORDER BY schemaname, tablename&quot;)"
-                                    class="schema-tree-item w-full text-left px-3 py-2 rounded-lg text-xs text-gray-400 hover:text-white font-mono">
-                                <span class="text-emerald-400">SHOW</span> pg_tables
-                            </button>
-                        </div>
-                    </div>
+    try {
+        // Load schema and data in parallel
+        const [schemaData] = await Promise.all([
+            apiGet(`/api/admin/db/tables/${table}/schema?schema=${schema}`),
+            loadTableData(table, schema)
+        ]);
+        if(schemaData) {
+            currentPK = schemaData.primary_key;
+            renderStructure(schemaData);
+        }
+        tableStatus.textContent = '';
+    } catch(e) {
+        tableStatus.textContent = 'Error: '+e.message;
+    }
+};
 
-                    <!-- Usage tips -->
-                    <div class="card-subtle rounded-xl mt-4 p-4">
-                        <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Tips</h3>
-                        <ul class="space-y-2 text-xs text-gray-500">
-                            <li class="flex items-start space-x-2">
-                                <span class="text-indigo-400 mt-0.5">⌘</span>
-                                <span>Press <span class="kbd">Ctrl</span> + <span class="kbd">Enter</span> to run</span>
-                            </li>
-                            <li class="flex items-start space-x-2">
-                                <span class="text-amber-400 mt-0.5">!</span>
-                                <span>Read-only queries only (SELECT, EXPLAIN, SHOW)</span>
-                            </li>
-                            <li class="flex items-start space-x-2">
-                                <span class="text-emerald-400 mt-0.5">⇧</span>
-                                <span>Max 500 rows returned per query</span>
-                            </li>
-                        </ul>
-                    </div>
-                </div>
+async function loadTableData(table, schema) {
+    try {
+        const q = `SELECT * FROM "${schema}"."${table}" LIMIT 200`;
+        const data = await apiPost('/api/admin/db/query', {query: q});
+        if(data) {
+            currentData = data;
+            currentColumns = data.columns || [];
+            renderData(data);
+        }
+    } catch(e) {
+        dataContainer.innerHTML = '<div class="p-4 text-sm text-red-400">'+App.escapeHtml(e.message)+'</div>';
+    }
+}
 
-                <!-- Main: Query editor + results -->
-                <div class="xl:col-span-3 order-1 xl:order-2 space-y-4">
+// ── Render data grid ─────────────────────────────
+function renderData(data) {
+    if(currentTab !== 'data') return;
+    const {columns, rows} = data;
+    if(!columns || !columns.length) {
+        dataContainer.innerHTML = '<div class="empty-state py-12"><p class="text-sm text-gray-500">No data</p></div>';
+        return;
+    }
 
-                    <!-- Query editor -->
-                    <div class="card-subtle rounded-xl">
-                        <div class="px-4 py-3 border-b border-gray-700/50 flex items-center justify-between">
-                            <h2 class="text-sm font-semibold text-gray-300">SQL Query</h2>
-                            <div class="flex items-center space-x-2">
-                                <button onclick="clearEditor()"
-                                        class="text-xs text-gray-500 hover:text-gray-300 transition-colors px-2 py-1 rounded">
-                                    Clear
-                                </button>
-                                <button onclick="executeQuery()"
-                                        class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium rounded-lg transition-all flex items-center space-x-1.5">
-                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                                    </svg>
-                                    <span>Run</span>
-                                </button>
-                            </div>
-                        </div>
-                        <div class="editor-wrapper">
-                            <textarea id="sql-editor"
-                                      class="sql-editor w-full bg-gray-900/50 text-gray-100 p-4 pl-12 rounded-b-xl border-0 placeholder-gray-600"
-                                      placeholder="Enter your SQL query here...
-        Example: SELECT * FROM &quot;Accounts&quot; LIMIT 10"
-                                      spellcheck="false"
-                                      autocomplete="off"
-                                      autocorrect="off"
-                                      autocapitalize="off"
-                                      rows="8">SELECT * FROM "Accounts" LIMIT 50</textarea>
-                        </div>
-                    </div>
+    let html = '<div class="overflow-auto h-full"><table class="data-grid w-full border-collapse">';
+    html += '<thead><tr class="text-xs text-gray-400 uppercase">';
+    html += '<th class="px-2 py-2 w-10 text-center font-medium text-gray-600">#</th>';
+    columns.forEach(col => {
+        html += `<th class="px-3 py-2 font-medium text-left whitespace-nowrap">${App.escapeHtml(col)}</th>`;
+    });
+    html += '<th class="px-2 py-2 w-16"></th>'; // actions
+    html += '</tr></thead><tbody>';
 
-                    <!-- Results -->
-                    <div class="card-subtle rounded-xl">
-                        <div class="px-4 py-3 border-b border-gray-700/50 flex items-center justify-between">
-                            <div class="flex items-center space-x-3">
-                                <h2 class="text-sm font-semibold text-gray-300">Results</h2>
-                                <span id="result-status" class="text-xs text-gray-500">Ready</span>
-                            </div>
-                            <div class="flex items-center space-x-3">
-                                <span id="result-meta" class="text-xs text-gray-500"></span>
-                                <button id="copy-results" onclick="copyResults()"
-                                        class="hidden text-xs text-gray-500 hover:text-gray-300 transition-colors px-2 py-1 rounded">
-                                    Copy
-                                </button>
-                            </div>
-                        </div>
-                        <div id="results-container" class="overflow-auto" style="max-height: 600px;">
-                            <div class="text-center py-12 text-gray-500">
-                                <svg class="w-12 h-12 mx-auto mb-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/>
-                                </svg>
-                                <p class="text-sm">Run a query to see results</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Error display -->
-                    <div id="error-display" class="hidden bg-red-900/30 border border-red-800/40 rounded-xl p-4">
-                        <div class="flex items-start space-x-3">
-                            <svg class="w-5 h-5 text-red-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                            </svg>
-                            <div>
-                                <p class="text-sm font-medium text-red-300">Query Error</p>
-                                <p id="error-text" class="text-sm text-red-400/80 mt-1 font-mono"></p>
-                            </div>
-                        </div>
-                    </div>
-
-                </div>
-            </div>
-        </div>
-    </main>
-
-    <script>
-        (function() {
-            'use strict';
-
-            if (!App.requireAuth()) return;
-
-            const editor = document.getElementById('sql-editor');
-            const resultsContainer = document.getElementById('results-container');
-            const errorDisplay = document.getElementById('error-display');
-            const errorText = document.getElementById('error-text');
-            const resultStatus = document.getElementById('result-status');
-            const resultMeta = document.getElementById('result-meta');
-            const copyBtn = document.getElementById('copy-results');
-            const indicator = document.getElementById('connection-indicator');
-
-            let currentResults = null;
-
-            // ── Keyboard shortcut: Ctrl+Enter to run ───────
-            editor.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                    e.preventDefault();
-                    executeQuery();
-                }
-                // Tab to insert 4 spaces
-                if (e.key === 'Tab') {
-                    e.preventDefault();
-                    const start = editor.selectionStart;
-                    const end = editor.selectionEnd;
-                    editor.value = editor.value.substring(0, start) + '    ' + editor.value.substring(end);
-                    editor.selectionStart = editor.selectionEnd = start + 4;
-                }
-            });
-
-            // ── Execute ────────────────────────────────────
-            window.executeQuery = async function() {
-                const query = editor.value.trim();
-                if (!query) {
-                    App.showToast('Please enter a query.', 'warning');
-                    return;
-                }
-
-                // Hide previous error
-                errorDisplay.classList.add('hidden');
-                resultStatus.innerHTML = '<span class="status-dot running"></span> Running...';
-                copyBtn.classList.add('hidden');
-                resultMeta.textContent = '';
-
-                try {
-                    const data = await apiExecuteQuery(query);
-
-                    if (!data) {
-                        // Possibly 401 redirect
-                        return;
-                    }
-
-                    renderResults(data);
-                } catch (err) {
-                    showError(err.message || 'Unknown error');
-                    resultStatus.innerHTML = '<span class="status-dot error"></span> Error';
-                }
-            };
-
-            // ── Render results ─────────────────────────────
-            function renderResults(data) {
-                const { columns, rows, row_count, execution_time_ms } = data;
-
-                resultStatus.innerHTML = `<span class="status-dot success"></span> Success`;
-                resultMeta.textContent = `${row_count} rows in ${execution_time_ms}ms`;
-
-                if (!columns || columns.length === 0) {
-                    resultsContainer.innerHTML = `
-                        <div class="text-center py-12 text-gray-500">
-                            <p class="text-sm">Query executed. ${row_count} rows affected.</p>
-                        </div>
-                    `;
-                    currentResults = null;
-                    copyBtn.classList.add('hidden');
-                    return;
-                }
-
-                copyBtn.classList.remove('hidden');
-                currentResults = { columns, rows };
-
-                let html = '<div class="overflow-x-auto"><table class="results-table w-full">';
-                html += '<thead><tr class="text-left text-xs text-gray-400 uppercase border-b border-gray-700">';
-                columns.forEach(col => {
-                    html += `<th class="px-4 py-3 font-medium">${App.escapeHtml(col)}</th>`;
-                });
-                html += '</tr></thead><tbody>';
-
-                if (rows.length === 0) {
-                    html += '<tr><td colspan="' + columns.length + '" class="text-center py-8 text-gray-500 text-sm">No rows returned</td></tr>';
-                } else {
-                    rows.forEach(row => {
-                        html += '<tr class="border-b border-gray-800/30 text-sm">';
-                        row.forEach(cell => {
-                            const val = cell !== null ? String(cell) : '<span class="text-gray-600 italic">NULL</span>';
-                            html += `<td class="px-4 py-2.5 text-gray-300 font-mono text-xs">${val}</td>`;
-                        });
-                        html += '</tr>';
-                    });
-                }
-
-                html += '</tbody></table></div>';
-                resultsContainer.innerHTML = html;
+    rows.forEach((row, ri) => {
+        const rowClass = selectedRow === ri ? 'bg-indigo-900/20' : '';
+        html += `<tr class="border-b border-gray-800/30 text-sm ${rowClass}" onclick="selectDataRow(${ri})" oncontextmenu="showContextMenu(event,${ri})">`;
+        html += `<td class="row-num">${ri+1}</td>`;                row.forEach((cell, ci) => {
+            if(cell === null) {
+                html += `<td class="px-3 py-2 cell-null text-xs" ondblclick="startEdit(${ri},${ci})">NULL</td>`;
+            } else {
+                const str = String(cell);
+                const display = str.length > 100 ? str.slice(0,100)+'...' : str;
+                html += `<td class="px-3 py-2 text-xs text-gray-300 font-mono max-w-[300px] overflow-hidden text-ellipsis whitespace-nowrap" ondblclick="startEdit(${ri},${ci})" title="${App.escapeHtml(str)}">${App.escapeHtml(display)}</td>`;
             }
+        });
+        html += '<td class="px-2 py-2 text-center"><button onclick="deleteRowByIndex('+ri+')" class="text-red-500/50 hover:text-red-400 transition-colors" title="Delete row">✕</button></td>';
+        html += '</tr>';
+    });
 
-            // ── Error ──────────────────────────────────────
-            function showError(msg) {
-                errorDisplay.classList.remove('hidden');
-                errorText.textContent = msg;
-                resultStatus.innerHTML = '<span class="status-dot error"></span> Error';
+    html += '</tbody></table></div>';
+    dataContainer.innerHTML = html;
+    document.getElementById('btn-refresh').classList.remove('hidden');
+    document.getElementById('btn-insert-row').classList.remove('hidden');
+}
+
+// ── Render structure ────────────────────────────
+function renderStructure(schemaData) {
+    if(currentTab !== 'structure') return;
+    const {columns, primary_key, row_count} = schemaData;
+    let html = '<div class="p-4"><div class="flex items-center space-x-4 mb-4 text-sm">';
+    html += `<span class="text-gray-300 font-medium">Primary Key: <code class="text-indigo-400">${App.escapeHtml(primary_key||'None')}</code></span>`;
+    html += `<span class="text-gray-500">${row_count} rows</span></div>`;
+    html += '<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-xs text-gray-500 uppercase border-b border-gray-700">';
+    html += '<th class="px-3 py-2 text-left">Column</th><th class="px-3 py-2 text-left">Type</th><th class="px-3 py-2 text-center">Nullable</th><th class="px-3 py-2 text-left">Default</th><th class="px-3 py-2 text-center">PK</th></tr></thead><tbody>';
+    columns.forEach(col => {
+        const nullable = col.is_nullable ? '<span class="text-emerald-400">YES</span>' : '<span class="text-red-400">NO</span>';
+        const pk = col.is_primary_key ? '<span class="badge badge-warning">PK</span>' : '';
+        const def = col.column_default ? `<code class="text-xs text-gray-400">${App.escapeHtml(col.column_default)}</code>` : '<span class="text-gray-600">—</span>';
+        const typeStr = col.character_maximum_length ? col.data_type + '(' + col.character_maximum_length + ')' : col.data_type;
+        html += `<tr class="border-b border-gray-800/30"><td class="px-3 py-2 text-gray-200 font-medium">${App.escapeHtml(col.column_name)}</td>`;
+        html += `<td class="px-3 py-2 text-indigo-300 font-mono text-xs">${App.escapeHtml(typeStr)}</td>`;
+        html += `<td class="px-3 py-2 text-center text-xs">${nullable}</td>`;
+        html += `<td class="px-3 py-2 font-mono text-xs">${def}</td>`;
+        html += `<td class="px-3 py-2 text-center">${pk}</td></tr>`;
+    });
+    html += '</tbody></table></div></div>';
+    structureContainer.innerHTML = html;
+}
+
+// ── Tab switching ──────────────────────────────
+window.switchTab = function(tab) {
+    currentTab = tab;
+    document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+    ['data','structure','sql'].forEach(t => {
+        document.getElementById('panel-'+t).classList.add('hidden');
+    });
+    document.getElementById('tab-'+tab).classList.add('active');
+    document.getElementById('panel-'+tab).classList.remove('hidden');
+
+    if(tab === 'data' && currentData) renderData(currentData);
+    if(tab === 'structure' && selectedTable) {
+        tableStatus.textContent = 'Loading structure...';
+        apiGet(`/api/admin/db/tables/${selectedTable}/schema?schema=${currentSchema||'public'}`).then(d => {
+            if(d) renderStructure(d);
+            tableStatus.textContent = '';
+        }).catch(e => { tableStatus.textContent = 'Error'; });
+    }
+};
+
+// ── Row selection & context menu ────────────────
+window.selectDataRow = function(ri) {
+    selectedRow = ri;
+    // Re-render to show highlight
+    if(currentData) renderData(currentData);
+};
+
+window.showContextMenu = function(e, ri) {
+    e.preventDefault();
+    contextRow = ri;
+    const menu = document.getElementById('context-menu');
+    menu.style.left = e.clientX+'px';
+    menu.style.top = e.clientY+'px';
+    menu.classList.remove('hidden');
+    setTimeout(() => document.addEventListener('click', hideContextMenu, {once:true}), 10);
+};
+
+function hideContextMenu() {
+    document.getElementById('context-menu').classList.add('hidden');
+}
+
+// ── Inline editing ─────────────────────────────
+window.startEdit = function(ri, ci) {
+    if(!currentData || !currentData.rows[ri]) return;
+    if(editingCell) return; // already editing
+    
+    const row = currentData.rows[ri];
+    const original = row[ci];
+    editingCell = {row: ri, col: ci, original};
+    selectedRow = ri;
+    renderData(currentData);
+    
+    // Find the cell and replace with input
+    const table = dataContainer.querySelector('table');
+    if(!table) return;
+    const tr = table.querySelectorAll('tbody tr')[ri];
+    if(!tr) return;
+    // Skip first column (row num) and last column (actions)
+    const td = tr.querySelectorAll('td')[ci + 1]; // +1 for row num
+    if(!td) return;
+    
+    const val = original !== null ? String(original) : '';
+    td.className = 'editing';
+    td.innerHTML = `<input type="text" id="edit-input" value="${App.escapeHtml(val)}" autofocus>`;
+    
+    const input = document.getElementById('edit-input');
+    input.focus();
+    input.select();
+    
+    input.addEventListener('keydown', function handler(e) {
+        if(e.key === 'Enter') {
+            e.preventDefault();
+            saveEdit(input.value);
+        } else if(e.key === 'Escape') {
+            cancelEdit();
+        } else if(e.key === 'Tab') {
+            e.preventDefault();
+            saveEdit(input.value);
+            // Move to next cell
+            const nextCi = ci + 1 < currentData.columns.length ? ci + 1 : 0;
+            const nextRi = nextCi === 0 ? ri + 1 : ri;
+            if(nextRi < currentData.rows.length) {
+                setTimeout(() => startEdit(nextRi, nextCi), 50);
             }
+        }
+    });
+    
+    input.addEventListener('blur', () => {
+        // Save on blur unless cancelled
+        setTimeout(() => {
+            if(editingCell) saveEdit(input.value);
+        }, 200);
+    });
+};
 
-            // ── Copy results as CSV ────────────────────────
-            window.copyResults = function() {
-                if (!currentResults) return;
-                const { columns, rows } = currentResults;
+async function saveEdit(newValue) {
+    if(!editingCell || !selectedTable) return;
+    const {row, col, original} = editingCell;
+    const column = currentData.columns[col];
+    const pkCol = currentPK;
+    
+    editingCell = null;
+    
+    if(newValue === (original !== null ? String(original) : '')) {
+        // No change
+        if(currentData) renderData(currentData);
+        return;
+    }
+    
+    // Build UPDATE query
+    if(!pkCol) {
+        App.showToast('Cannot edit: table has no primary key', 'error');
+        if(currentData) renderData(currentData);
+        return;
+    }
+    
+    // Find the PK value for this row
+    const pkIdx = currentData.columns.indexOf(pkCol);
+    if(pkIdx === -1) {
+        App.showToast('Cannot edit: primary key column not found', 'error');
+        if(currentData) renderData(currentData);
+        return;
+    }
+    
+    const pkValue = currentData.rows[row][pkIdx];
+    const schema = currentSchema || 'public';
+    
+    try {
+        let escapedValue;
+        if(newValue === '') {
+            escapedValue = 'NULL';
+        } else if(column.endsWith('_uuid') || column.endsWith('_id') || column.endsWith('_at') || column.includes('date') || column.includes('timestamp')) {
+            escapedValue = "'" + newValue.replace(/'/g, "''") + "'";
+        } else {
+            // Try as number first
+            const num = Number(newValue);
+            if(!isNaN(num) && column !== 'text' && column !== 'character varying') {
+                escapedValue = newValue;
+            } else {
+                escapedValue = "'" + newValue.replace(/'/g, "''") + "'";
+            }
+        }
+        
+        const pkEscaped = typeof pkValue === 'string' ? "'" + pkValue.replace(/'/g, "''") + "'" : pkValue;
+        const query = `UPDATE "${schema}"."${selectedTable}" SET "${column}" = ${escapedValue} WHERE "${pkCol}" = ${pkEscaped}`;
+        
+        const result = await apiPost('/api/admin/db/execute', {query});
+        if(result && result.success) {
+            App.showToast('Cell updated', 'success');
+            // Refresh data
+            loadTableData(selectedTable, currentSchema||'public');
+        }
+    } catch(e) {
+        App.showToast('Edit failed: '+e.message, 'error');
+        if(currentData) renderData(currentData);
+    }
+}
 
-                let csv = columns.join(',') + '\n';
-                rows.forEach(row => {
-                    csv += row.map(cell => {
-                        if (cell === null) return '';
-                        const str = String(cell);
-                        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-                            return '"' + str.replace(/"/g, '""') + '"';
-                        }
-                        return str;
-                    }).join(',') + '\n';
-                });
+function cancelEdit() {
+    editingCell = null;
+    if(currentData) renderData(currentData);
+}
 
-                navigator.clipboard.writeText(csv).then(() => {
-                    App.showToast('Results copied as CSV', 'success');
-                }).catch(() => {
-                    App.showToast('Failed to copy', 'error');
-                });
-            };
+// ── Delete row ────────────────────────────────
+window.deleteRowByIndex = async function(ri) {
+    if(!selectedTable || !currentPK || !currentData) {
+        App.showToast('Cannot delete: table has no primary key', 'error');
+        return;
+    }
+    if(!confirm('Delete this row?')) return;
+    
+    const pkIdx = currentData.columns.indexOf(currentPK);
+    if(pkIdx === -1) { App.showToast('PK column not found', 'error'); return; }
+    
+    const pkValue = currentData.rows[ri][pkIdx];
+    const schema = currentSchema || 'public';
+    const pkEscaped = typeof pkValue === 'string' ? "'" + pkValue.replace(/'/g, "''") + "'" : pkValue;
+    
+    try {
+        const result = await apiPost('/api/admin/db/execute', {
+            query: `DELETE FROM "${schema}"."${selectedTable}" WHERE "${currentPK}" = ${pkEscaped}`
+        });
+        if(result && result.success) {
+            App.showToast('Row deleted', 'success');
+            loadTableData(selectedTable, schema);
+        }
+    } catch(e) {
+        App.showToast('Delete failed: '+e.message, 'error');
+    }
+};
 
-            // ── Quick select a table ───────────────────────
-            window.quickSelect = function(table) {
-                editor.value = 'SELECT * FROM "' + table + '" LIMIT 50';
-                editor.focus();
-                setTimeout(executeQuery, 200);
-            };
+// Keep legacy alias
+window.deleteRow = window.deleteRowByIndex;
 
-            // ── Run a custom query ───────────────────────────
-            window.runQuery = function(query) {
-                editor.value = query;
-                editor.focus();
-                setTimeout(executeQuery, 200);
-            };
+// ── Insert row ────────────────────────────────
+window.showInsertRow = function() {
+    if(!selectedTable) return;
+    // Build a modal with inputs for each column
+    const schema = currentSchema || 'public';
+    
+    // First get the columns from currentData
+    if(!currentData || !currentData.columns) {
+        App.showToast('No table selected', 'warning');
+        return;
+    }
+    
+    const cols = currentData.columns;
+    let html = '<div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onclick="closeModal(event)">';
+    html += '<div class="bg-gray-800 rounded-2xl w-full max-w-lg p-6 border border-gray-700 shadow-2xl" onclick="event.stopPropagation()">';
+    html += '<h3 class="text-lg font-semibold text-white mb-4">Insert Row into <code class="text-indigo-400">'+App.escapeHtml(selectedTable)+'</code></h3>';
+    html += '<div class="space-y-3 max-h-96 overflow-y-auto mb-4">';
+    
+    cols.forEach(col => {
+        const isPK = col === currentPK;
+        const placeholder = isPK ? 'Auto-generated (leave empty)' : '';
+        html += `<div><label class="block text-xs text-gray-400 mb-1">${App.escapeHtml(col)}${isPK ? ' <span class="text-amber-400">(PK)</span>' : ''}</label>`;
+        html += `<input type="text" id="insert-${App.escapeHtml(col)}" placeholder="${placeholder}" class="w-full px-3 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500"></div>`;
+    });
+    
+    html += '</div>';
+    html += '<div class="flex justify-end space-x-3">';
+    html += '<button onclick="closeModal()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-all text-sm">Cancel</button>';
+    html += '<button onclick="submitInsert()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-all text-sm">Insert</button>';
+    html += '</div></div></div>';
+    
+    const modal = document.createElement('div');
+    modal.id = 'insert-modal';
+    modal.innerHTML = html;
+    document.body.appendChild(modal);
+};
 
-            // ── Legacy alias ──────────────────────────────────
-            window.loadQuery = window.runQuery;
+window.submitInsert = async function() {
+    if(!selectedTable || !currentData) return;
+    const schema = currentSchema || 'public';
+    const cols = currentData.columns;
+    
+    const insertCols = [];
+    const insertVals = [];
+    
+    cols.forEach(col => {
+        const input = document.getElementById('insert-'+col);
+        if(!input) return;
+        const val = input.value.trim();
+        if(val === '') {
+            // Check if it's the PK - skip if auto-generated
+            if(col === currentPK) return;
+            insertCols.push('"'+col+'"');
+            insertVals.push('DEFAULT');
+        } else {
+            insertCols.push('"'+col+'"');
+            // Try number
+            const num = Number(val);
+            if(!isNaN(num)) {
+                insertVals.push(val);
+            } else {
+                insertVals.push("'"+val.replace(/'/g, "''")+"'");
+            }
+        }
+    });
+    
+    if(!insertCols.length) {
+        App.showToast('No columns to insert', 'warning');
+        return;
+    }
+    
+    try {
+        const query = `INSERT INTO "${schema}"."${selectedTable}" (${insertCols.join(', ')}) VALUES (${insertVals.join(', ')})`;
+        const result = await apiPost('/api/admin/db/execute', {query});
+        if(result && result.success) {
+            App.showToast('Row inserted', 'success');
+            closeModal();
+            loadTableData(selectedTable, schema);
+        }
+    } catch(e) {
+        App.showToast('Insert failed: '+e.message, 'error');
+    }
+};
 
-            // ── Clear editor ───────────────────────────────
-            window.clearEditor = function() {
-                editor.value = '';
-                editor.focus();
-            };
+window.closeModal = function(e) {
+    if(e && e.target !== e.currentTarget) return;
+    const modal = document.getElementById('insert-modal');
+    if(modal) modal.remove();
+};
 
-            // ── Run default query on load ──────────────────
-            setTimeout(executeQuery, 300);
+// ── Context menu actions ──────────────────────
+window.editCell = function() {
+    hideContextMenu();
+    // Find the primary key value for the context row
+    if(contextRow < 0 || !currentData) return;
+    // Start editing first cell of that row
+    startEdit(contextRow, 0);
+};
 
-        })();
-    </script>
+window.deleteSelectedRow = function() {
+    hideContextMenu();
+    if(contextRow < 0 || !currentData) return;
+    const row = currentData.rows[contextRow];
+    deleteRow(encodeURIComponent(JSON.stringify(row)), contextRow);
+};
+
+window.copyCellValue = function() {
+    hideContextMenu();
+    if(contextRow < 0 || !currentData) return;
+    const val = currentData.rows[contextRow][0];
+    const text = val !== null ? String(val) : 'NULL';
+    navigator.clipboard.writeText(text).then(() => App.showToast('Copied', 'success'));
+};
+
+window.copyRowAsInsert = function() {
+    hideContextMenu();
+    if(contextRow < 0 || !currentData || !selectedTable) return;
+    const row = currentData.rows[contextRow];
+    const cols = currentData.columns;
+    const schema = currentSchema || 'public';
+    
+    const colList = cols.map(c => '"'+c+'"').join(', ');
+    const valList = row.map((v, i) => {
+        if(v === null) return 'DEFAULT';
+        const str = String(v);
+        const num = Number(str);
+        if(!isNaN(num) && cols[i] !== 'text' && cols[i] !== 'character varying') return str;
+        return "'"+str.replace(/'/g, "''")+"'";
+    }).join(', ');
+    
+    const insertSQL = `INSERT INTO "${schema}"."${selectedTable}" (${colList}) VALUES (${valList});`;
+    navigator.clipboard.writeText(insertSQL).then(() => App.showToast('INSERT copied to clipboard', 'success'));
+};
+
+// ── SQL Query tab ─────────────────────────────
+window.runSqlQuery = async function() {
+    const query = sqlEditor.value.trim();
+    if(!query) { App.showToast('Enter a query', 'warning'); return; }
+    
+    sqlStatus.innerHTML = '<span class="status-dot running"></span> Running...';
+    
+    try {
+        const isWrite = writeToggle.checked;
+        let data;
+        if(isWrite) {
+            data = await apiPost('/api/admin/db/execute', {query});
+            if(data) {
+                sqlStatus.innerHTML = '<span class="status-dot success"></span> '+data.message+' ('+data.execution_time_ms+'ms)';
+                sqlResults.innerHTML = '<div class="p-6 text-center"><p class="text-sm text-emerald-400">'+App.escapeHtml(data.message)+'</p><p class="text-xs text-gray-500 mt-1">'+data.execution_time_ms+'ms</p></div>';
+            }
+        } else {
+            data = await apiPost('/api/admin/db/query', {query});
+            if(data) {
+                sqlStatus.innerHTML = '<span class="status-dot success"></span> '+data.row_count+' rows in '+data.execution_time_ms+'ms';
+                renderSqlResults(data);
+            }
+        }
+    } catch(e) {
+        sqlStatus.innerHTML = '<span class="status-dot error"></span> Error';
+        sqlResults.innerHTML = '<div class="p-4 text-sm text-red-400 font-mono">'+App.escapeHtml(e.message)+'</div>';
+    }
+};
+window.runSqlQuery = runSqlQuery;
+
+function renderSqlResults(data) {
+    const {columns, rows} = data;
+    if(!columns || !columns.length) {
+        sqlResults.innerHTML = '<div class="text-center py-12 text-gray-500 text-sm">Query executed. '+data.row_count+' rows affected.</div>';
+        return;
+    }
+    let html = '<div class="overflow-auto h-full"><table class="data-grid w-full"><thead><tr class="text-xs text-gray-400 uppercase border-b border-gray-700">';
+    columns.forEach(col => {
+        html += '<th class="px-3 py-2 font-medium text-left whitespace-nowrap">'+App.escapeHtml(col)+'</th>';
+    });
+    html += '</tr></thead><tbody>';
+    rows.forEach(row => {
+        html += '<tr class="border-b border-gray-800/30 text-sm">';
+        row.forEach(cell => {
+            if(cell === null) html += '<td class="px-3 py-2 cell-null text-xs">NULL</td>';
+            else {
+                const str = String(cell);
+                const display = str.length > 200 ? str.slice(0,200)+'...' : str;
+                html += '<td class="px-3 py-2 text-xs text-gray-300 font-mono max-w-[300px] overflow-hidden text-ellipsis whitespace-nowrap" title="'+App.escapeHtml(str)+'">'+App.escapeHtml(display)+'</td>';
+            }
+        });
+        html += '</tr>';
+    });
+    html += '</tbody></table></div>';
+    sqlResults.innerHTML = html;
+}
+
+// ── Keyboard shortcuts ─────────────────────────
+sqlEditor.addEventListener('keydown', (e) => {
+    if(e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        runSqlQuery();
+    }
+    if(e.key === 'Tab') {
+        e.preventDefault();
+        const start = sqlEditor.selectionStart;
+        const end = sqlEditor.selectionEnd;
+        sqlEditor.value = sqlEditor.value.substring(0,start)+'    '+sqlEditor.value.substring(end);
+        sqlEditor.selectionStart = sqlEditor.selectionEnd = start+4;
+    }
+});
+
+// ── Refresh data ──────────────────────────────
+window.refreshData = function() {
+    if(selectedTable) {
+        tableStatus.textContent = 'Refreshing...';
+        loadTableData(selectedTable, currentSchema||'public');
+        tableStatus.textContent = '';
+    }
+};
+
+// ── Init ──────────────────────────────────────
+loadTables();
+setTimeout(() => {
+    // Run the default query in SQL tab
+    runSqlQuery();
+}, 500);
+
+})();
+</script>
 </body>
 </html>
