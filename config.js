@@ -20,9 +20,6 @@ window.ASHEN_CONFIG = {
     tokenKey: 'ashen_auth_token',
     refreshTokenKey: 'ashen_refresh_token',
 
-    // pgAdmin database editor URL (relative — proxied through the API)
-    pgAdminUrl: '/pgadmin/',
-
     // Release info
     launcherFileName: 'AshenLauncher.exe',
     modpackFileName: 'modpack.zip',

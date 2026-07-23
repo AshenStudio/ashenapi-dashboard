@@ -19,31 +19,9 @@ services:
     ports:
       - "${DASHBOARD_PORT:-8080}:80"
     environment:
-      # ── API_URL (required for production) ────────────────
       # Client-facing URL for the API. The browser uses this
-      # for all fetch() calls. Must be the same origin as the
-      # dashboard (or configured for CORS).
+      # for all fetch() calls.
       #   Production:  https://ashenapi.overdev.net
       #   Local:       http://localhost:8000
       - API_URL=${API_URL:-}
-
-      # ── API_UPSTREAM_URL (optional) ─────────────────────
-      # Internal Docker network URL for Caddy's reverse proxy
-      # upstream (/api/* and /pgadmin/* are proxied here).
-      # Defaults to http://ashenapi-api:8000 (the FastAPI
-      # container in the ashenapi-py stack).
-      # Only set this if the internal URL differs from the
-      # default or from API_URL.
-      - API_UPSTREAM_URL=${API_UPSTREAM_URL:-}
     restart: unless-stopped
-    # ── If both stacks are on the same external network,
-    #     uncomment the network below:
-    # networks:
-    #   ashenapi-net:
-    #     external: true
-
-# ── If using a shared network with the API stack, uncomment:
-# networks:
-#   ashenapi-net:
-#     external: true
-#     name: ashenapi-net

@@ -14,38 +14,98 @@
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .animate-fade-in { animation: fadeIn 0.4s ease-out; }
 
-        .pgadmin-iframe {
-            width: 100%;
-            height: calc(100vh - 140px);
-            min-height: 600px;
-            border: none;
-            border-radius: 0.75rem;
-            background: #fff;
-            transition: opacity 0.3s ease;
+        /* SQL Editor */
+        .sql-editor {
+            font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            tab-size: 4;
+            resize: vertical;
+            min-height: 180px;
+            max-height: 500px;
+            outline: none;
         }
-        .pgadmin-iframe.loading { opacity: 0; }
-        .pgadmin-iframe.loaded { opacity: 1; }
-
-        /* Loading skeleton */
-        .skeleton {
-            background: linear-gradient(90deg, rgba(31,41,55,0.6) 25%, rgba(55,65,81,0.6) 50%, rgba(31,41,55,0.6) 75%);
-            background-size: 200% 100%;
-            animation: shimmer 1.5s infinite;
-            border-radius: 0.75rem;
+        .sql-editor:focus {
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3);
         }
-        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
-        .status-badge {
+        /* Results table */
+        .results-table { font-size: 13px; }
+        .results-table th {
+            position: sticky;
+            top: 0;
+            background: #1f2937;
+            z-index: 10;
+        }
+        .results-table tr:hover td {
+            background: rgba(55, 65, 81, 0.4);
+        }
+        .results-table td, .results-table th {
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* Keyboard shortcut badge */
+        .kbd {
             display: inline-flex;
             align-items: center;
-            padding: 2px 10px;
-            border-radius: 999px;
-            font-size: 11px;
-            font-weight: 500;
+            justify-content: center;
+            padding: 1px 5px;
+            font-size: 10px;
+            font-family: inherit;
+            background: rgba(75, 85, 99, 0.5);
+            border: 1px solid rgba(107, 114, 128, 0.3);
+            border-radius: 4px;
+            color: #9ca3af;
+            min-width: 18px;
         }
-        .status-badge.connected { background: rgba(52, 211, 153, 0.15); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.3); }
-        .status-badge.connecting { background: rgba(251, 191, 36, 0.15); color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.3); }
-        .status-badge.error { background: rgba(248, 113, 113, 0.15); color: #f87171; border: 1px solid rgba(248, 113, 113, 0.3); }
+
+        /* Line numbers for editor */
+        .editor-wrapper {
+            position: relative;
+        }
+        .line-numbers {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 40px;
+            padding: 12px 0;
+            text-align: right;
+            color: #4b5563;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            overflow: hidden;
+            user-select: none;
+            pointer-events: none;
+        }
+        .line-numbers span {
+            display: block;
+            padding-right: 12px;
+        }
+
+        /* Status indicator */
+        .status-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 6px;
+        }
+        .status-dot.success { background: #34d399; }
+        .status-dot.error { background: #f87171; }
+        .status-dot.running { background: #fbbf24; animation: pulse 1s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+        .schema-tree-item {
+            transition: all 0.15s ease;
+        }
+        .schema-tree-item:hover {
+            background: rgba(55, 65, 81, 0.5);
+        }
     </style>
 </head>
 <body class="min-h-screen text-gray-100">
@@ -83,75 +143,166 @@
     <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
 
     <main class="animate-fade-in">
-        <!-- Header bar -->
+        <!-- Header -->
         <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-4">
             <div class="flex items-center justify-between">
                 <div class="flex items-center space-x-4">
                     <div>
-                        <h1 class="text-2xl font-bold text-white">PostgreSQL — pgAdmin 4</h1>
-                        <p class="text-gray-400 text-sm mt-0.5">Full-featured database management, embedded in the dashboard.</p>
+                        <h1 class="text-2xl font-bold text-white">Database Query Editor</h1>
+                        <p class="text-gray-400 text-sm mt-0.5">Run read-only SQL queries against the PostgreSQL database.</p>
                     </div>
                 </div>
-                <div class="flex items-center space-x-3">
-                    <span id="connection-status" class="status-badge connecting">⟳ Connecting</span>
-                    <a id="open-standalone" href="#" target="_blank"
-                       class="text-xs text-gray-400 hover:text-indigo-400 transition-colors flex items-center space-x-1"
-                       title="Open in new tab">
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
-                        </svg>
-                        <span>Open standalone</span>
-                    </a>
+                <div id="connection-indicator" class="flex items-center text-xs text-gray-500">
+                    <span class="status-dot success"></span>
+                    <span>Connected</span>
                 </div>
             </div>
         </div>
 
-        <!-- pgAdmin iframe -->
         <div class="px-4 sm:px-6 lg:px-8 pb-6">
-            <!-- Loading skeleton shown while iframe loads -->
-            <div id="loading-skeleton" class="skeleton w-full" style="height: calc(100vh - 190px); min-height: 600px;"></div>
+            <div class="grid grid-cols-1 xl:grid-cols-4 gap-6">
 
-            <iframe id="pgadmin-frame"
-                    class="pgadmin-iframe loading"
-                    src="about:blank"
-                    sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
-                    allow="clipboard-read; clipboard-write"
-                    title="pgAdmin 4"></iframe>
+                <!-- Sidebar: Schema browser -->
+                <div class="xl:col-span-1 order-2 xl:order-1">
+                    <div class="card-subtle rounded-xl">
+                        <div class="px-4 py-3 border-b border-gray-700/50 flex items-center justify-between">
+                            <h2 class="text-sm font-semibold text-gray-300">Quick Actions</h2>
+                        </div>
+                        <div class="p-3 space-y-1">
+                            <button onclick="loadQuery('SELECT * FROM \"Accounts\" LIMIT 50')"
+                                    class="schema-tree-item w-full text-left px-3 py-2 rounded-lg text-xs text-gray-400 hover:text-white font-mono">
+                                <span class="text-indigo-400">SELECT</span> * FROM "Accounts"
+                            </button>
+                            <button onclick="loadQuery('SELECT * FROM \"Identities\" LIMIT 50')"
+                                    class="schema-tree-item w-full text-left px-3 py-2 rounded-lg text-xs text-gray-400 hover:text-white font-mono">
+                                <span class="text-indigo-400">SELECT</span> * FROM "Identities"
+                            </button>
+                            <button onclick="loadQuery('SELECT * FROM \"Releases\" LIMIT 50')"
+                                    class="schema-tree-item w-full text-left px-3 py-2 rounded-lg text-xs text-gray-400 hover:text-white font-mono">
+                                <span class="text-indigo-400">SELECT</span> * FROM "Releases"
+                            </button>
+                            <button onclick="loadQuery('SELECT * FROM \"RefreshTokens\" LIMIT 50')"
+                                    class="schema-tree-item w-full text-left px-3 py-2 rounded-lg text-xs text-gray-400 hover:text-white font-mono">
+                                <span class="text-indigo-400">SELECT</span> * FROM "RefreshTokens"
+                            </button>
+                            <button onclick="loadQuery('SELECT * FROM \"LauncherSessions\" LIMIT 50')"
+                                    class="schema-tree-item w-full text-left px-3 py-2 rounded-lg text-xs text-gray-400 hover:text-white font-mono">
+                                <span class="text-indigo-400">SELECT</span> * FROM "LauncherSessions"
+                            </button>
+                            <button onclick="loadQuery('SELECT * FROM \"MigrationLogs\" LIMIT 50')"
+                                    class="schema-tree-item w-full text-left px-3 py-2 rounded-lg text-xs text-gray-400 hover:text-white font-mono">
+                                <span class="text-indigo-400">SELECT</span> * FROM "MigrationLogs"
+                            </button>
+                            <button onclick="loadQuery('SELECT * FROM \"MigrationRetryRequests\" LIMIT 50')"
+                                    class="schema-tree-item w-full text-left px-3 py-2 rounded-lg text-xs text-gray-400 hover:text-white font-mono">
+                                <span class="text-indigo-400">SELECT</span> * FROM "MigrationRetryRequests"
+                            </button>
+                            <div class="border-t border-gray-700/30 my-2"></div>
+                            <button onclick="loadQuery('SELECT table_name, table_schema FROM information_schema.tables WHERE table_schema NOT IN (\\'pg_catalog\\', \\'information_schema\\') ORDER BY table_schema, table_name')"
+                                    class="schema-tree-item w-full text-left px-3 py-2 rounded-lg text-xs text-gray-400 hover:text-white font-mono">
+                                <span class="text-emerald-400">SHOW</span> All Tables
+                            </button>
+                            <button onclick="loadQuery('SELECT schemaname, tablename, tableowner FROM pg_tables WHERE schemaname NOT IN (\\'pg_catalog\\', \\'information_schema\\') ORDER BY schemaname, tablename')"
+                                    class="schema-tree-item w-full text-left px-3 py-2 rounded-lg text-xs text-gray-400 hover:text-white font-mono">
+                                <span class="text-emerald-400">SHOW</span> pg_tables
+                            </button>
+                        </div>
+                    </div>
 
-            <!-- Connection error fallback -->
-            <div id="connection-error" class="hidden card-subtle rounded-xl p-8 text-center">
-                <svg class="w-16 h-16 text-red-500/50 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-                </svg>
-                <h2 class="text-xl font-semibold text-white mb-2">Could not connect to pgAdmin</h2>
-                <p class="text-gray-400 max-w-md mx-auto mb-6">
-                    The pgAdmin service doesn't appear to be running. Make sure the API stack is
-                    deployed with the pgAdmin container.
-                </p>
-                <div class="inline-block text-left bg-gray-800/50 rounded-lg p-4 mb-6 text-sm">
-                    <p class="text-gray-400 font-medium mb-2">Checklist:</p>
-                    <ul class="space-y-1.5 text-gray-500">
-                        <li class="flex items-start space-x-2">
-                            <span class="text-emerald-400 mt-0.5">✓</span>
-                            <span>pgAdmin container is running in Portainer</span>
-                        </li>
-                        <li class="flex items-start space-x-2">
-                            <span class="text-emerald-400 mt-0.5">✓</span>
-                            <span>The API container can reach <code class="text-gray-300 text-xs">ashenapi-pgadmin:80</code></span>
-                        </li>
-                        <li class="flex items-start space-x-2">
-                            <span class="text-emerald-400 mt-0.5">✓</span>
-                            <span>FastAPI proxy route <code class="text-gray-300 text-xs">/pgadmin/</code> is registered</span>
-                        </li>
-                        <li class="flex items-start space-x-2">
-                            <span class="text-gray-600 mt-0.5">○</span>
-                            <span>Try accessing <code id="direct-url" class="text-gray-300 text-xs"></code></span>
-                        </li>
-                    </ul>
+                    <!-- Usage tips -->
+                    <div class="card-subtle rounded-xl mt-4 p-4">
+                        <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Tips</h3>
+                        <ul class="space-y-2 text-xs text-gray-500">
+                            <li class="flex items-start space-x-2">
+                                <span class="text-indigo-400 mt-0.5">⌘</span>
+                                <span>Press <span class="kbd">Ctrl</span> + <span class="kbd">Enter</span> to run</span>
+                            </li>
+                            <li class="flex items-start space-x-2">
+                                <span class="text-amber-400 mt-0.5">!</span>
+                                <span>Read-only queries only (SELECT, EXPLAIN, SHOW)</span>
+                            </li>
+                            <li class="flex items-start space-x-2">
+                                <span class="text-emerald-400 mt-0.5">⇧</span>
+                                <span>Max 500 rows returned per query</span>
+                            </li>
+                        </ul>
+                    </div>
                 </div>
-                <button onclick="retryConnection()" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-lg transition-all">
-                    Retry Connection
-                </button>
+
+                <!-- Main: Query editor + results -->
+                <div class="xl:col-span-3 order-1 xl:order-2 space-y-4">
+
+                    <!-- Query editor -->
+                    <div class="card-subtle rounded-xl">
+                        <div class="px-4 py-3 border-b border-gray-700/50 flex items-center justify-between">
+                            <h2 class="text-sm font-semibold text-gray-300">SQL Query</h2>
+                            <div class="flex items-center space-x-2">
+                                <button onclick="clearEditor()"
+                                        class="text-xs text-gray-500 hover:text-gray-300 transition-colors px-2 py-1 rounded">
+                                    Clear
+                                </button>
+                                <button onclick="executeQuery()"
+                                        class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium rounded-lg transition-all flex items-center space-x-1.5">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                    <span>Run</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="editor-wrapper">
+                            <textarea id="sql-editor"
+                                      class="sql-editor w-full bg-gray-900/50 text-gray-100 p-4 pl-12 rounded-b-xl border-0 placeholder-gray-600"
+                                      placeholder="Enter your SQL query here...
+        Example: SELECT * FROM &quot;Accounts&quot; LIMIT 10"
+                                      spellcheck="false"
+                                      autocomplete="off"
+                                      autocorrect="off"
+                                      autocapitalize="off"
+                                      rows="8">SELECT * FROM "Accounts" LIMIT 50</textarea>
+                        </div>
+                    </div>
+
+                    <!-- Results -->
+                    <div class="card-subtle rounded-xl">
+                        <div class="px-4 py-3 border-b border-gray-700/50 flex items-center justify-between">
+                            <div class="flex items-center space-x-3">
+                                <h2 class="text-sm font-semibold text-gray-300">Results</h2>
+                                <span id="result-status" class="text-xs text-gray-500">Ready</span>
+                            </div>
+                            <div class="flex items-center space-x-3">
+                                <span id="result-meta" class="text-xs text-gray-500"></span>
+                                <button id="copy-results" onclick="copyResults()"
+                                        class="hidden text-xs text-gray-500 hover:text-gray-300 transition-colors px-2 py-1 rounded">
+                                    Copy
+                                </button>
+                            </div>
+                        </div>
+                        <div id="results-container" class="overflow-auto" style="max-height: 600px;">
+                            <div class="text-center py-12 text-gray-500">
+                                <svg class="w-12 h-12 mx-auto mb-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/>
+                                </svg>
+                                <p class="text-sm">Run a query to see results</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Error display -->
+                    <div id="error-display" class="hidden bg-red-900/30 border border-red-800/40 rounded-xl p-4">
+                        <div class="flex items-start space-x-3">
+                            <svg class="w-5 h-5 text-red-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <div>
+                                <p class="text-sm font-medium text-red-300">Query Error</p>
+                                <p id="error-text" class="text-sm text-red-400/80 mt-1 font-mono"></p>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
             </div>
         </div>
     </main>
@@ -162,246 +313,154 @@
 
             if (!App.requireAuth()) return;
 
-            const cfg = CFG();
-            const iframe = document.getElementById('pgadmin-frame');
-            const skeleton = document.getElementById('loading-skeleton');
-            const statusBadge = document.getElementById('connection-status');
-            const errorDiv = document.getElementById('connection-error');
-            const directUrlEl = document.getElementById('direct-url');
-            const standaloneLink = document.getElementById('open-standalone');
+            const editor = document.getElementById('sql-editor');
+            const resultsContainer = document.getElementById('results-container');
+            const errorDisplay = document.getElementById('error-display');
+            const errorText = document.getElementById('error-text');
+            const resultStatus = document.getElementById('result-status');
+            const resultMeta = document.getElementById('result-meta');
+            const copyBtn = document.getElementById('copy-results');
+            const indicator = document.getElementById('connection-indicator');
 
-            const pgAdminUrl = cfg.pgAdminUrl || '/pgadmin/';
-            directUrlEl.textContent = window.location.origin + pgAdminUrl;
-            standaloneLink.href = pgAdminUrl;
+            let currentResults = null;
 
-            // ── Session refresh ────────────────────────────
-            let refreshInterval = null;
-
-            async function refreshPgAdminSession() {
-                // Step 1: Refresh the Bearer token first (keeps it alive
-                // indefinitely as long as the refresh token is valid)
-                const freshTokens = await apiRefreshToken();
-                if (!freshTokens) return false; // refresh token expired
-
-                // Step 2: Use the fresh Bearer token to get a pgAdmin cookie
-                const token = getToken();
-                if (!token) return false;
-                try {
-                    const res = await fetch(cfg.apiUrl + '/pgadmin/auth', {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': 'Bearer ' + token,
-                            'Accept': 'application/json',
-                        },
-                        credentials: 'include',
-                    });
-                    return res.ok;
-                } catch {
-                    return false;
+            // ── Keyboard shortcut: Ctrl+Enter to run ───────
+            editor.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault();
+                    executeQuery();
                 }
-            }
-
-            function startSessionRefresh() {
-                // Refresh the Bearer token AND pgAdmin cookie every 25 minutes.
-                // Bearer token: gets a fresh 60-min expiry every 25 min.
-                // pgAdmin cookie: gets a fresh 1-hour expiry every 25 min.
-                // Both stay alive indefinitely (refresh token lasts 7 days).
-                if (refreshInterval) clearInterval(refreshInterval);
-                refreshInterval = setInterval(async () => {
-                    const ok = await refreshPgAdminSession();
-                    if (!ok) {
-                        setTimeout(async () => {
-                            const retry = await refreshPgAdminSession();
-                            if (!retry) {
-                                console.warn('Token refresh cycle failed — logging out.');
-                            }
-                        }, 2000);
-                    }
-                }, 25 * 60 * 1000); // 25 min
-            }
-
-            function stopSessionRefresh() {
-                if (refreshInterval) {
-                    clearInterval(refreshInterval);
-                    refreshInterval = null;
+                // Tab to insert 4 spaces
+                if (e.key === 'Tab') {
+                    e.preventDefault();
+                    const start = editor.selectionStart;
+                    const end = editor.selectionEnd;
+                    editor.value = editor.value.substring(0, start) + '    ' + editor.value.substring(end);
+                    editor.selectionStart = editor.selectionEnd = start + 4;
                 }
-            }
+            });
 
-            // ── Authenticate & load pgAdmin ────────────────
-            async function loadPgAdmin() {
-                skeleton.classList.remove('hidden');
-                iframe.classList.add('loading');
-                iframe.classList.remove('loaded');
-                statusBadge.className = 'status-badge connecting';
-                statusBadge.textContent = '⟳ Authenticating…';
+            // ── Execute ────────────────────────────────────
+            window.executeQuery = async function() {
+                const query = editor.value.trim();
+                if (!query) {
+                    App.showToast('Please enter a query.', 'warning');
+                    return;
+                }
+
+                // Hide previous error
+                errorDisplay.classList.add('hidden');
+                resultStatus.innerHTML = '<span class="status-dot running"></span> Running...';
+                copyBtn.classList.add('hidden');
+                resultMeta.textContent = '';
 
                 try {
-                    const ok = await refreshPgAdminSession();
-                    if (!ok) {
-                        throw new Error('Authentication request failed. Check your connection.');
+                    const data = await apiExecuteQuery(query);
+
+                    if (!data) {
+                        // Possibly 401 redirect
+                        return;
                     }
 
-                    statusBadge.textContent = '⟳ Connecting';
-                    iframe.src = pgAdminUrl;
-                    setTimeout(checkConnection, 5000);
+                    renderResults(data);
                 } catch (err) {
-                    showAuthError(err.message || 'Unknown error');
+                    showError(err.message || 'Unknown error');
+                    resultStatus.innerHTML = '<span class="status-dot error"></span> Error';
                 }
-            }
-
-            // ── Connection check ───────────────────────────
-            let connectionChecked = false;
-            let authCheckInterval = null;
-
-            function checkConnection() {
-                if (connectionChecked) return;
-                try {
-                    const doc = iframe.contentDocument || iframe.contentWindow?.document;
-                    if (doc) {
-                        onConnected();
-                    }
-                } catch (e) {
-                    onConnected();
-                }
-            }
-
-            function onConnected() {
-                if (connectionChecked) return;
-                connectionChecked = true;
-                skeleton.classList.add('hidden');
-                iframe.classList.remove('loading');
-                iframe.classList.add('loaded');
-                statusBadge.className = 'status-badge connected';
-                statusBadge.textContent = '✓ Connected';
-                errorDiv.classList.add('hidden');
-
-                // Start background session refresh
-                startSessionRefresh();
-
-                // Start monitoring iframe for expired sessions
-                startAuthMonitor();
-            }
-
-            // ── Auth monitor — detect 401 pages in iframe ──
-            function startAuthMonitor() {
-                if (authCheckInterval) clearInterval(authCheckInterval);
-
-                // Check every 30 seconds if the iframe has been hit
-                // with an auth failure page
-                authCheckInterval = setInterval(() => {
-                    checkIframeForAuthFailure();
-                }, 30 * 1000);
-            }
-
-            function stopAuthMonitor() {
-                if (authCheckInterval) {
-                    clearInterval(authCheckInterval);
-                    authCheckInterval = null;
-                }
-            }
-
-            function checkIframeForAuthFailure() {
-                if (!connectionChecked) return;
-                try {
-                    const doc = iframe.contentDocument || iframe.contentWindow?.document;
-                    if (!doc) return;
-
-                    const body = doc.body;
-                    if (!body) return;
-
-                    const text = body.textContent || '';
-
-                    // The proxy's 401 page contains the exact phrase
-                    // "Admin authentication required" — this is unique
-                    // enough to avoid false positives with pgAdmin's own UI
-                    if (text.includes('Admin authentication required')) {
-
-                        console.warn('pgAdmin iframe shows 401 — session expired, re-authenticating…');
-                        handleAuthFailure();
-                    }
-                } catch (e) {
-                    // Cross-origin or DOM error — ignore
-                }
-            }
-
-            async function handleAuthFailure() {
-                stopSessionRefresh();
-                stopAuthMonitor();
-                connectionChecked = false;
-
-                statusBadge.className = 'status-badge connecting';
-                statusBadge.textContent = '⟳ Session expired — renewing…';
-
-                // Try to refresh the session — this will also refresh
-                // the Bearer token if needed
-                const ok = await refreshPgAdminSession();
-                if (ok) {
-                    App.showToast('Session renewed', 'success');
-                    iframe.src = pgAdminUrl;
-                    // onConnected() will restart refresh + monitor via setTimeout chain
-                    setTimeout(checkConnection, 5000);
-                } else {
-                    App.showToast('Your session has expired. Please log in again.', 'error');
-                    setTimeout(() => { window.location.href = 'login.html'; }, 2000);
-                }
-            }
-
-            // ── Also catch 401 on iframe navigation events ──
-            iframe.addEventListener('load', () => {
-                if (connectionChecked) {
-                    // The iframe navigated (pgAdmin page change) — check
-                    // it's not a 401 page
-                    setTimeout(() => checkIframeForAuthFailure(), 500);
-                }
-            });
-
-            iframe.addEventListener('error', () => {
-                showError();
-            });
-
-            // ── Error display ──────────────────────────────
-            function showAuthError(msg) {
-                skeleton.classList.add('hidden');
-                iframe.classList.add('hidden');
-                statusBadge.className = 'status-badge error';
-                statusBadge.textContent = '✗ Auth Failed';
-                errorDiv.classList.remove('hidden');
-                const msgEl = errorDiv.querySelector('p');
-                if (msgEl) {
-                    msgEl.innerHTML = 'Could not authenticate for pgAdmin access: <strong class="text-red-400">' +
-                        App.escapeHtml(msg) + '</strong>';
-                }
-            }
-
-            function showError() {
-                if (connectionChecked) return;
-                skeleton.classList.add('hidden');
-                iframe.classList.add('hidden');
-                statusBadge.className = 'status-badge error';
-                statusBadge.textContent = '✗ Unreachable';
-                errorDiv.classList.remove('hidden');
-            }
-
-            // ── Retry ──────────────────────────────────────
-            window.retryConnection = function() {
-                stopSessionRefresh();
-                stopAuthMonitor();
-                connectionChecked = false;
-                iframe.classList.remove('hidden');
-                errorDiv.classList.add('hidden');
-                statusBadge.className = 'status-badge connecting';
-                statusBadge.textContent = '⟳ Connecting';
-                loadPgAdmin();
             };
 
-            // ── Clean up on page unload ────────────────────
-            window.addEventListener('beforeunload', () => {
-                stopSessionRefresh();
-                stopAuthMonitor();
-            });
+            // ── Render results ─────────────────────────────
+            function renderResults(data) {
+                const { columns, rows, row_count, execution_time_ms } = data;
 
-            // ── Init ───────────────────────────────────────
-            setTimeout(loadPgAdmin, 100);
+                resultStatus.innerHTML = `<span class="status-dot success"></span> Success`;
+                resultMeta.textContent = `${row_count} rows in ${execution_time_ms}ms`;
+
+                if (!columns || columns.length === 0) {
+                    resultsContainer.innerHTML = `
+                        <div class="text-center py-12 text-gray-500">
+                            <p class="text-sm">Query executed. ${row_count} rows affected.</p>
+                        </div>
+                    `;
+                    currentResults = null;
+                    copyBtn.classList.add('hidden');
+                    return;
+                }
+
+                copyBtn.classList.remove('hidden');
+                currentResults = { columns, rows };
+
+                let html = '<div class="overflow-x-auto"><table class="results-table w-full">';
+                html += '<thead><tr class="text-left text-xs text-gray-400 uppercase border-b border-gray-700">';
+                columns.forEach(col => {
+                    html += `<th class="px-4 py-3 font-medium">${App.escapeHtml(col)}</th>`;
+                });
+                html += '</tr></thead><tbody>';
+
+                if (rows.length === 0) {
+                    html += '<tr><td colspan="' + columns.length + '" class="text-center py-8 text-gray-500 text-sm">No rows returned</td></tr>';
+                } else {
+                    rows.forEach(row => {
+                        html += '<tr class="border-b border-gray-800/30 text-sm">';
+                        row.forEach(cell => {
+                            const val = cell !== null ? String(cell) : '<span class="text-gray-600 italic">NULL</span>';
+                            html += `<td class="px-4 py-2.5 text-gray-300 font-mono text-xs">${val}</td>`;
+                        });
+                        html += '</tr>';
+                    });
+                }
+
+                html += '</tbody></table></div>';
+                resultsContainer.innerHTML = html;
+            }
+
+            // ── Error ──────────────────────────────────────
+            function showError(msg) {
+                errorDisplay.classList.remove('hidden');
+                errorText.textContent = msg;
+                resultStatus.innerHTML = '<span class="status-dot error"></span> Error';
+            }
+
+            // ── Copy results as CSV ────────────────────────
+            window.copyResults = function() {
+                if (!currentResults) return;
+                const { columns, rows } = currentResults;
+
+                let csv = columns.join(',') + '\n';
+                rows.forEach(row => {
+                    csv += row.map(cell => {
+                        if (cell === null) return '';
+                        const str = String(cell);
+                        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+                            return '"' + str.replace(/"/g, '""') + '"';
+                        }
+                        return str;
+                    }).join(',') + '\n';
+                });
+
+                navigator.clipboard.writeText(csv).then(() => {
+                    App.showToast('Results copied as CSV', 'success');
+                }).catch(() => {
+                    App.showToast('Failed to copy', 'error');
+                });
+            };
+
+            // ── Load a predefined query ────────────────────
+            window.loadQuery = function(query) {
+                editor.value = query;
+                editor.focus();
+                // Auto-run after a brief delay
+                setTimeout(executeQuery, 200);
+            };
+
+            // ── Clear editor ───────────────────────────────
+            window.clearEditor = function() {
+                editor.value = '';
+                editor.focus();
+            };
+
+            // ── Run default query on load ──────────────────
+            setTimeout(executeQuery, 300);
 
         })();
     </script>
