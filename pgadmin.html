@@ -169,40 +169,40 @@
                             <h2 class="text-sm font-semibold text-gray-300">Quick Actions</h2>
                         </div>
                         <div class="p-3 space-y-1">
-                            <button onclick="loadQuery('SELECT * FROM \"Accounts\" LIMIT 50')"
+                            <button onclick="quickSelect('Accounts')"
                                     class="schema-tree-item w-full text-left px-3 py-2 rounded-lg text-xs text-gray-400 hover:text-white font-mono">
                                 <span class="text-indigo-400">SELECT</span> * FROM "Accounts"
                             </button>
-                            <button onclick="loadQuery('SELECT * FROM \"Identities\" LIMIT 50')"
+                            <button onclick="quickSelect('Identities')"
                                     class="schema-tree-item w-full text-left px-3 py-2 rounded-lg text-xs text-gray-400 hover:text-white font-mono">
                                 <span class="text-indigo-400">SELECT</span> * FROM "Identities"
                             </button>
-                            <button onclick="loadQuery('SELECT * FROM \"Releases\" LIMIT 50')"
+                            <button onclick="quickSelect('Releases')"
                                     class="schema-tree-item w-full text-left px-3 py-2 rounded-lg text-xs text-gray-400 hover:text-white font-mono">
                                 <span class="text-indigo-400">SELECT</span> * FROM "Releases"
                             </button>
-                            <button onclick="loadQuery('SELECT * FROM \"RefreshTokens\" LIMIT 50')"
+                            <button onclick="quickSelect('RefreshTokens')"
                                     class="schema-tree-item w-full text-left px-3 py-2 rounded-lg text-xs text-gray-400 hover:text-white font-mono">
                                 <span class="text-indigo-400">SELECT</span> * FROM "RefreshTokens"
                             </button>
-                            <button onclick="loadQuery('SELECT * FROM \"LauncherSessions\" LIMIT 50')"
+                            <button onclick="quickSelect('LauncherSessions')"
                                     class="schema-tree-item w-full text-left px-3 py-2 rounded-lg text-xs text-gray-400 hover:text-white font-mono">
                                 <span class="text-indigo-400">SELECT</span> * FROM "LauncherSessions"
                             </button>
-                            <button onclick="loadQuery('SELECT * FROM \"MigrationLogs\" LIMIT 50')"
+                            <button onclick="quickSelect('MigrationLogs')"
                                     class="schema-tree-item w-full text-left px-3 py-2 rounded-lg text-xs text-gray-400 hover:text-white font-mono">
                                 <span class="text-indigo-400">SELECT</span> * FROM "MigrationLogs"
                             </button>
-                            <button onclick="loadQuery('SELECT * FROM \"MigrationRetryRequests\" LIMIT 50')"
+                            <button onclick="quickSelect('MigrationRetryRequests')"
                                     class="schema-tree-item w-full text-left px-3 py-2 rounded-lg text-xs text-gray-400 hover:text-white font-mono">
                                 <span class="text-indigo-400">SELECT</span> * FROM "MigrationRetryRequests"
                             </button>
                             <div class="border-t border-gray-700/30 my-2"></div>
-                            <button onclick="loadQuery('SELECT table_name, table_schema FROM information_schema.tables WHERE table_schema NOT IN (\\'pg_catalog\\', \\'information_schema\\') ORDER BY table_schema, table_name')"
+                            <button onclick="runQuery(&quot;SELECT table_name, table_schema FROM information_schema.tables WHERE table_schema NOT IN ('pg_catalog', 'information_schema') ORDER BY table_schema, table_name&quot;)"
                                     class="schema-tree-item w-full text-left px-3 py-2 rounded-lg text-xs text-gray-400 hover:text-white font-mono">
                                 <span class="text-emerald-400">SHOW</span> All Tables
                             </button>
-                            <button onclick="loadQuery('SELECT schemaname, tablename, tableowner FROM pg_tables WHERE schemaname NOT IN (\\'pg_catalog\\', \\'information_schema\\') ORDER BY schemaname, tablename')"
+                            <button onclick="runQuery(&quot;SELECT schemaname, tablename, tableowner FROM pg_tables WHERE schemaname NOT IN ('pg_catalog', 'information_schema') ORDER BY schemaname, tablename&quot;)"
                                     class="schema-tree-item w-full text-left px-3 py-2 rounded-lg text-xs text-gray-400 hover:text-white font-mono">
                                 <span class="text-emerald-400">SHOW</span> pg_tables
                             </button>
@@ -445,13 +445,22 @@
                 });
             };
 
-            // ── Load a predefined query ────────────────────
-            window.loadQuery = function(query) {
-                editor.value = query;
+            // ── Quick select a table ───────────────────────
+            window.quickSelect = function(table) {
+                editor.value = 'SELECT * FROM "' + table + '" LIMIT 50';
                 editor.focus();
-                // Auto-run after a brief delay
                 setTimeout(executeQuery, 200);
             };
+
+            // ── Run a custom query ───────────────────────────
+            window.runQuery = function(query) {
+                editor.value = query;
+                editor.focus();
+                setTimeout(executeQuery, 200);
+            };
+
+            // ── Legacy alias ──────────────────────────────────
+            window.loadQuery = window.runQuery;
 
             // ── Clear editor ───────────────────────────────
             window.clearEditor = function() {
