@@ -1,0 +1,14 @@
+# ── IDE / editor ──
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── OS junk ──
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# ── Runtime artifacts ──
+*.log

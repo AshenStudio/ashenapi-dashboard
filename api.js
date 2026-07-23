@@ -185,6 +185,13 @@ async function apiListRetryRequests(page = 1, pageSize = 20) {
 
 // ── Database Query ─────────────────────────────────────────
 
+async function apiSetAdmin(accountId, isAdmin) {
+    return apiFetch(`/api/admin/accounts/${accountId}/set-admin`, {
+        method: 'PATCH',
+        body: { is_admin: isAdmin },
+    });
+}
+
 async function apiExecuteQuery(query, params = null) {
     return apiFetch('/api/admin/db/query', {
         method: 'POST',
