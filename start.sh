@@ -1,12 +1,19 @@
 #!/bin/sh
 # ── Ashen Studio Dashboard — Startup Script ──────────────
-# Reads the API_URL environment variable (optional) and
-# overrides the apiUrl in config.js at runtime before
-# starting the server. This lets Portainer set the API URL
-# without modifying config.js in the repo.
+# Reads environment variables and configures the dashboard
+# before starting Caddy.
 #
-# If API_URL is not set, the compiled-in value in config.js
-# is used as-is.
+# ── Environment variables ───────────────────────────────
+#   API_URL (required for production)
+#     Client-facing API URL for config.js. The browser uses
+#     this to make API calls. Should be the same origin as
+#     the dashboard (e.g., https://ashenapi.overdev.net).
+#
+#   API_UPSTREAM_URL (optional)
+#     Internal Docker network URL for Caddy's reverse proxy
+#     upstream. Defaults to http://ashenapi-api:8000.
+#     Only needed if the internal URL differs from API_URL.
+# ──────────────────────────────────────────────────────────
 
 set -e
 
@@ -31,5 +38,11 @@ else
     echo "[*] No API_URL env var — using default config.js"
 fi
 
-echo "[*] Starting HTTP server on port 80"
-exec python -m http.server 80 --bind 0.0.0.0
+# Export the upstream URL for Caddy's env var substitution
+# If not set, Caddyfile defaults to http://ashenapi-api:8000
+if [ -n "$API_UPSTREAM_URL" ]; then
+    export API_UPSTREAM_URL
+fi
+
+echo "[*] Starting Caddy on port 80"
+exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile

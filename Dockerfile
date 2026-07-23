@@ -1,5 +1,7 @@
 # ── Ashen Studio Dashboard — Dockerfile ──────────────────
-# Serves static HTML/JS/CSS via Python's built-in HTTP server.
+# Serves static HTML/JS/CSS via Caddy, with reverse proxy
+# for /api/* and /pgadmin/* to the FastAPI backend.
+#
 # Supports API_URL environment variable (optional) to override
 # the apiUrl at runtime via start.sh.
 #
@@ -7,15 +9,19 @@
 # push to main (see .github/workflows/publish-dashboard.yml).
 # ──────────────────────────────────────────────────────────
 
-FROM python:3-slim
+FROM caddy:alpine
 
 WORKDIR /app
 
-# Copy all static files
+# Copy all static files and configuration
 COPY . .
 
-RUN chmod +x /app/start.sh
+# Caddyfile goes in the default location
+COPY Caddyfile /etc/caddy/Caddyfile
 
 EXPOSE 80
 
-CMD ["/app/start.sh"]
+# caddy:alpine has ENTRYPOINT ["caddy"] — clear it so CMD
+# runs /app/start.sh directly instead of passing it to caddy
+ENTRYPOINT []
+CMD ["/bin/sh", "/app/start.sh"]
